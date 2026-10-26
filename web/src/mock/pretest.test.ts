@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TestQuestion } from "../components/TestRunner";
 import { DEMO_NODES, isOneOf, verifyProblem } from "./generate";
-import { gradeTestAnswer, POST_TEST, PRE_TEST, scoreTest, TEST_LEVEL } from "./pretest";
+import { gradeTestAnswer, POST_TEST, PRE_TEST, scoreTest, TEST_LEVEL, testIntro } from "./pretest";
 
 // R-26: the learning-gain test (Michael, 2026-10-22). 10 questions on the 5 demo skills, two per
 // skill, generated at level 2, with a different seed for the pre and post forms, so the items
@@ -17,6 +17,12 @@ describe("pre and post test (R-26)", () => {
       for (const q of form) expect(q.level).toBe(TEST_LEVEL);
       expect(TEST_LEVEL).toBe(2);
     }
+  });
+
+  it("says how many questions and how long, from the question count (teen test 2026-10-26)", () => {
+    expect(testIntro(10)).toMatch(/^10 questions, about 10 minutes\. /);
+    expect(testIntro(4)).toMatch(/^4 questions, about 4 minutes\. /);
+    expect(testIntro(PRE_TEST.length)).toContain("skip");
   });
 
   it("shares no problem between the forms, or within one", () => {

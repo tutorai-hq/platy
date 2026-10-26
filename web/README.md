@@ -104,10 +104,13 @@ by" screen, which holds until you reload the page.
    **Demo** button: **Start the pre-test** on the welcome screen, **Start the post-test** on an end
    screen (teen testers took the buttons for part of the lesson). Each is 10 questions, two per demo skill at
    level 2, one at a time, with no hints and no feedback, then a score in total and per skill.
+   The intro says how many questions and about how long (a minute each) and that skipping is fine.
    The post form asks the same kind of question as the pre form in each slot, with new numbers of
    the same size, and never repeats one. Both forms are fixed (`src/mock/pretest.ts`), so every
-   student sits the same two tests. Nothing is kept: the adult running the session writes the
-   score down. Only shown on the scripted mock for now.
+   student sits the same two tests. On a laptop the whole test runs from the keyboard: **Start**,
+   each answer box and **Done** take focus in turn, so Enter moves it along, and the heading and
+   the math keep one height, so the answer box never moves between questions. Nothing is kept:
+   the adult running the session writes the score down. Only shown on the scripted mock for now.
 
 The dashed **Demo** button in the header (mock only) jumps to any screen on cue: skip a problem, each of the
 three puzzles (spot the error, missing step, balance scale), the worked example, the pause screen, the

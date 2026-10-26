@@ -16,7 +16,7 @@ const PRAISE = ["good thinking", "i like", "great", "nice", "smart", "clever", "
 
 // Not tutor lines: ids, the math itself, the card's headings, the test screens and the safety panel.
 const SKIP_KEYS = new Set(["problem_id", "skill_id", "prompt", "instruction", "item_id", "template", "format", "variable", "schema_version", "about"]);
-const SKIP_EXPORTS = new Set(["TEST_TITLE", "TEST_INTRO", "TEST_DONE", "TEST_NOTE", "TEST_INSTRUCTIONS", "SAFETY_RESOURCES"]);
+const SKIP_EXPORTS = new Set(["TEST_TITLE", "TEST_LENGTH", "TEST_INTRO", "TEST_DONE", "TEST_NOTE", "TEST_INSTRUCTIONS", "SAFETY_RESOURCES"]);
 
 function collect(value: unknown, path: string, out: [string, string][]): void {
   if (typeof value === "string") out.push([path, value]);

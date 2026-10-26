@@ -3,8 +3,8 @@ import { skillName } from "../content/primer";
 import { childMathToLatex } from "../math/latex";
 import { Tex } from "../math/MathText";
 import { CHECKED_AS, type GeneratedProblem } from "../mock/generate";
-import { POST_TEST, PRE_TEST, scoreTest, type TestScore } from "../mock/pretest";
-import { TEST_DONE, TEST_INSTRUCTIONS, TEST_INTRO, TEST_NOTE, TEST_TITLE } from "../mock/script";
+import { POST_TEST, PRE_TEST, scoreTest, testIntro, type TestScore } from "../mock/pretest";
+import { TEST_DONE, TEST_INSTRUCTIONS, TEST_NOTE, TEST_TITLE } from "../mock/script";
 import { canCheck } from "./answer";
 import { MathInput } from "./MathInput";
 
@@ -55,7 +55,8 @@ export function TestRunner({ form, onDone }: { form: "pre" | "post"; onDone: () 
           </tbody>
         </table>
         <p className="test__note">{TEST_NOTE}</p>
-        <button type="button" className="btn btn--primary btn--big" onClick={onDone}>
+        {/* Focused, so Enter closes the score the way it moved through the questions (R-26). */}
+        <button type="button" className="btn btn--primary btn--big" onClick={onDone} autoFocus>
           Done
         </button>
       </section>
@@ -66,7 +67,7 @@ export function TestRunner({ form, onDone }: { form: "pre" | "post"; onDone: () 
     return (
       <section className="card test" aria-labelledby="test-heading">
         <h1 id="test-heading">{TEST_TITLE}</h1>
-        <p>{TEST_INTRO}</p>
+        <p>{testIntro(problems.length)}</p>
         <button type="button" className="btn btn--primary btn--big" onClick={() => setIndex(0)} autoFocus>
           Start
         </button>
@@ -121,7 +122,7 @@ export function TestQuestion({ problem, index, total, draft, onDraft, onNext, on
         placeholder="Your answer"
         onChange={onDraft}
         onSubmit={onNext}
-        autoFocus
+        autoFocus="laptop"
       />
       <div className="problem__actions">
         <button type="button" className="btn btn--primary" onClick={onNext} disabled={!canCheck(draft)}>

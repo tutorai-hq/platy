@@ -1,4 +1,5 @@
 import { type DemoNode, gcd, type GeneratedProblem, isOneOf, type Level, problemSession } from "./generate";
+import { TEST_INTRO, TEST_LENGTH } from "./script";
 import { near } from "./grade";
 
 // The learning-gain test (R-26; Michael's design, 2026-10-22): 10 questions on the 5 demo
@@ -47,6 +48,15 @@ function postForm(seed: number, pre: readonly GeneratedProblem[]): GeneratedProb
 
 export const PRE_TEST: readonly GeneratedProblem[] = preForm(PRE_SEED);
 export const POST_TEST: readonly GeneratedProblem[] = postForm(POST_SEED, PRE_TEST);
+
+/** About a minute a question, for the intro's time estimate (R-26). */
+const MINUTES_PER_QUESTION = 1;
+
+/** The intro line: how many questions, how long, and the rules. */
+export function testIntro(count: number): string {
+  const length = TEST_LENGTH.replace("{n}", String(count)).replace("{minutes}", String(Math.ceil(count * MINUTES_PER_QUESTION)));
+  return `${length} ${TEST_INTRO}`;
+}
 
 /**
  * The one checker for both forms. Only a finished number counts: "-3", "x = -3", "-3 = x" or a
