@@ -1,5 +1,7 @@
 # Slip map for the demo path (R-40)
 
+*Renumbered 2026-10-26: the step-by-step solving requirement this note calls R-39 is now R-48. R-39 is Connor's "Stay on math" (main, 2026-10-22).*
+
 - **Who:** michael   **Area:** frontend
 - **Branch / PR:** on top of the step-solver change (R-39) on PR #4's branch, uncommitted; delivered to Michael to review and commit himself
 - **R-ids:** R-40 (new, approved by Michael 2026-10-22)   **gate:** green (`scripts/check`); `web/` tsc + vitest 182/182

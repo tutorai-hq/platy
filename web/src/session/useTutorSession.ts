@@ -65,7 +65,7 @@ export function useTutorSession(makeTransport: () => TutorTransport = createTran
       // One line at a time, and only one the solution will show (the reducer's step_sent rule),
       // so the server's lines and the screen's never drift apart.
       if (!steps || steps.problem_id !== problem_id || steps.pending !== null || steps.solved) return;
-      // The line shows in the solution itself, not the chat (R-39). React state only (P-1).
+      // The line shows in the solution itself, not the chat (R-48). React state only (P-1).
       dispatch({ type: "step_sent", text });
       send({ type: "step", problem_id, line, text });
     },

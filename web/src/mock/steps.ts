@@ -2,7 +2,7 @@ import { type Node, parseMathStrict, unwrap } from "../math/parse";
 import type { StepResult } from "../protocol";
 import { linearForm } from "./grade";
 
-// Mock-only step checking for step-by-step solving (R-39). In the real app the server checks
+// Mock-only step checking for step-by-step solving (R-48). In the real app the server checks
 // every line with platy.mathcheck; this stands in for it so the demo runs with no backend.
 // A line is a valid step when it is an equation with the same solution as the line above.
 

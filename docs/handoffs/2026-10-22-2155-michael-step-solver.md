@@ -1,5 +1,7 @@
 # Step-by-step solving with moving algebra (R-39)
 
+*Renumbered 2026-10-26: the step-by-step solving requirement this note calls R-39 is now R-48. R-39 is Connor's "Stay on math" (main, 2026-10-22).*
+
 - **Who:** michael   **Area:** frontend
 - **Branch / PR:** on top of PR #4's branch (`claude/content-library-design-txzs0z`), uncommitted; delivered to Michael as a patch to review and commit himself
 - **R-ids:** R-39 (new, approved by Michael 2026-10-22)   **gate:** green (`scripts/check`); `web/` tsc + vitest 172/172

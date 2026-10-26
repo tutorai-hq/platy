@@ -38,7 +38,7 @@ export interface PuzzleState {
 }
 
 /**
- * A step-by-step problem in progress (R-39). The lines are the child's own, in React state
+ * A step-by-step problem in progress (R-48). The lines are the child's own, in React state
  * only, and go with the problem.
  */
 export interface StepsState {

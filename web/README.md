@@ -33,7 +33,7 @@ First, the age question (R-36): pick any birth date more than 13 years ago (a mo
 years ago counts as not yet, since there's no day). A later date shows the "Thanks for stopping
 by" screen, which holds until you reload the page.
 
-1. **Problems 1 and 2, `2x + 5 = 17` and `3x - 4 = 11`, line by line (R-39).** Write one step
+1. **Problems 1 and 2, `2x + 5 = 17` and `3x - 4 = 11`, line by line (R-48).** Write one step
    under the equation and press Enter (or the keypad's **Check** key). A good line gets a check, and the
    algebra moves: a term that crosses the equals sign flies over and flips its sign
    (`2x = 12`), a divisor goes across as `÷ 2` (`x = 6`), a move written out on both sides drops in
@@ -169,7 +169,7 @@ Puzzles (R-37, R-38) add `puzzle {puzzle}`, `puzzle_result {instance_id, check, 
 client. `docs/content-library.md` §6.5 explains them, including why the chat waits between one
 problem or puzzle and the next.
 
-Step-by-step solving (R-39, proposed for Connor to accept) adds `format: "answer" | "steps"` to
+Step-by-step solving (R-48, proposed for Connor to accept) adds `format: "answer" | "steps"` to
 `problem`, `step {problem_id, line, text}` from the client (`line` counts from 1, one line at a
 time) and `step_result {problem_id, line, result, slip?}` from the server, where `result` is
 `valid`, `solved`, `invalid` or `unreadable`, and `slip` is the slip-map id an `invalid` line

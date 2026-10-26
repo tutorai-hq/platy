@@ -1,5 +1,7 @@
 # Repair puzzles for the demo slips (R-37)
 
+*Renumbered 2026-10-26: the step-by-step solving requirement this note calls R-39 is now R-48. R-39 is Connor's "Stay on math" (main, 2026-10-22).*
+
 - **Who:** michael   **Area:** frontend
 - **Branch / PR:** on top of R-39, R-40 and R-41 on PR #4's branch (`claude/content-library-design-txzs0z`)
 - **R-ids:** R-37 (approved; no new R-id)   **gate:** green (`scripts/check`); `web/` tsc + vitest 200/200

@@ -154,7 +154,7 @@ describe("session reducer", () => {
     });
   });
 
-  describe("step-by-step problems (R-39)", () => {
+  describe("step-by-step problems (R-48)", () => {
     const stepProblem = {
       type: "problem" as const, problem_id: "s1", skill_id: "two_step_equations", prompt: "2x + 5 = 17",
       instruction: "Solve it one line at a time", format: "steps" as const, kind: "practice" as const, position: 1, total: 2,

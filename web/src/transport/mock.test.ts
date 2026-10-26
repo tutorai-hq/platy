@@ -11,7 +11,7 @@ import { type MockTiming, MockTransport } from "./mock";
 const FAST: MockTiming = { thinkMs: 0, wordMs: 0, resetMs: 0 };
 
 // The answer-box lesson by default, so its problem ids stay p1 to p3; the demo itself opens
-// with STEP_LESSON (R-39).
+// with STEP_LESSON (R-48).
 function harness(lesson = LESSON, seed?: number, timing = FAST) {
   const events: ServerEvent[] = [];
   const t = new MockTransport(timing, seed, lesson);
@@ -514,7 +514,7 @@ describe("MockTransport", () => {
     expect(h.events.length).toBe(mark);
   });
 
-  describe("step-by-step problems (R-39)", () => {
+  describe("step-by-step problems (R-48)", () => {
     const steps = () => harness(STEP_LESSON);
     const results = (h: ReturnType<typeof harness>, from = 0) =>
       h.events.slice(from).filter((e) => e.type === "step_result").map((e) => (e.type === "step_result" ? e.result : null));

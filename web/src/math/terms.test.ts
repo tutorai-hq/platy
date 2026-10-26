@@ -33,7 +33,7 @@ describe("equationTerms", () => {
   });
 });
 
-describe("planStep (R-39 motion)", () => {
+describe("planStep (R-48 motion)", () => {
   it("flies a term across the equals sign and flips its sign", () => {
     const p = plan("2x + 5 = 17", "2x = 12");
     expect(p.motion).toEqual({ kind: "move", source: { side: "left", index: 1 }, to: "right", before: "+ 5", after: "- 5" });

@@ -12,7 +12,7 @@ export interface ScriptedProblem {
   skill_id: string;
   prompt: string;
   instruction: string;
-  /** "steps": solved one checked line at a time (R-39). Answer box otherwise. */
+  /** "steps": solved one checked line at a time (R-48). Answer box otherwise. */
   format?: "steps";
   /** The letter the answer is for: x when absent, null for a value to work out (R-18). */
   variable?: string | null;
@@ -41,7 +41,7 @@ export interface ScriptedProblem {
 export const OPENING = "Hi, I'm Platy! Today we're solving equations, one at a time.";
 
 /**
- * The demo opens with these (R-39): the student writes one line at a time and each line is
+ * The demo opens with these (R-48): the student writes one line at a time and each line is
  * checked before the next opens. The hints name the move, never the next line (R-02).
  */
 export const STEP_LESSON: ScriptedProblem[] = [
@@ -184,7 +184,7 @@ export const NUDGES = ["What would you try first?", "Try your idea in the answer
 /** One warm redirect for a message with no math in it; after that, the nudges. */
 export const OFF_TOPIC = "Let's keep this about the problem. What's the first thing you'd do to it?";
 
-// Step-by-step lines (R-39).
+// Step-by-step lines (R-48).
 export const STEP_UNREADABLE = "I couldn't read that line. Write it as an equation with x, like the line above.";
 export const STEP_IN_LINES = "Write it as the next line in your solution, so I can check each step.";
 
@@ -210,7 +210,7 @@ export const PUZZLE_NUDGE = "Try it in the puzzle. Ask me if you get stuck.";
 export const KEEP_GOING_READY = "Tap Keep going when you're ready.";
 export const BACK_TO_IT = "Now back to the one from before.";
 
-// A slip on a step-by-step problem (R-39, R-40): a repair puzzle on that one move, then a fresh
+// A slip on a step-by-step problem (R-48, R-40): a repair puzzle on that one move, then a fresh
 // problem of the same kind to check the fix stuck (R-41), in place of the one they slipped on.
 export const STEP_REPAIR_LEAD = "I think I know what happened on that line. Let's try that one move in a quick puzzle first.";
 export const ONE_MORE = "Now a new one, to check the fix holds. Same kind of problem, new numbers.";

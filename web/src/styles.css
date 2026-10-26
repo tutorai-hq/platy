@@ -296,7 +296,7 @@ button, input { font: inherit; color: inherit; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* Step-by-step solving (R-39). Lines line up on their equals signs, like work on paper. */
+/* Step-by-step solving (R-48). Lines line up on their equals signs, like work on paper. */
 .stepsolver { position: relative; }
 .ladder { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 1.45rem; }
 .ladder__row {

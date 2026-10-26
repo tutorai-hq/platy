@@ -3,7 +3,7 @@ import { toLatex } from "./latex";
 import { type Node, parseMathStrict } from "./parse";
 
 // The terms on each side of a linear equation, and how one line turns into the next. This is
-// display only: it drives the step solver's motion (R-39), never its grading, which is the
+// display only: it drives the step solver's motion (R-48), never its grading, which is the
 // server's (mock/steps.ts stands in for it).
 
 export interface Term {

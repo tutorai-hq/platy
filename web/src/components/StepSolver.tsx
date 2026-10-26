@@ -28,7 +28,7 @@ const MARKS = {
 /** While a detour waits for the tap, the line is marked but not to be fixed yet (R-01). */
 const MARK_BEFORE_DETOUR = "This line doesn't follow from the one above.";
 
-// Motion (R-39): when a line is accepted, it's built from the line above. Terms that stay
+// Motion (R-48): when a line is accepted, it's built from the line above. Terms that stay
 // slide down into place, a term that crosses the equals sign flies over and flips its sign,
 // and terms that were worked out fade together. Under 600 ms, and only a quick fade with
 // prefers-reduced-motion. The math is the server's verdict; this only draws it.
@@ -38,7 +38,7 @@ const ARRIVE_MS = 260;
 const GHOST_MS = 480;
 const EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
 
-// Step-by-step solving (R-39): the student writes one line at a time under the problem. Each
+// Step-by-step solving (R-48): the student writes one line at a time under the problem. Each
 // line is checked before the next one opens, and a wrong line is marked where it is.
 export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: Props) {
   const rows = [problem.prompt, ...steps.lines];

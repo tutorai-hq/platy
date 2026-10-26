@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { checkStep } from "./steps";
 
-// R-39: each line is checked as a valid next step from the line above it.
-describe("checkStep (R-39)", () => {
+// R-48: each line is checked as a valid next step from the line above it.
+describe("checkStep (R-48)", () => {
   it("accepts a valid next step", () => {
     expect(checkStep("2x + 5 = 17", "2x = 12")).toBe("valid");
     expect(checkStep("2x = 12", "x = 12/2")).toBe("valid");

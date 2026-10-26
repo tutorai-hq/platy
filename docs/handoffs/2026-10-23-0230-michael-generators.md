@@ -1,5 +1,7 @@
 # Problem generators for the demo skills (R-41)
 
+*Renumbered 2026-10-26: the step-by-step solving requirement this note calls R-39 is now R-48. R-39 is Connor's "Stay on math" (main, 2026-10-22).*
+
 - **Who:** michael   **Area:** frontend
 - **Branch / PR:** on top of R-39 and R-40 on PR #4's branch (`claude/content-library-design-txzs0z`), uncommitted; delivered to Michael as a patch to review and commit
 - **R-ids:** R-41 (new, approved by Michael 2026-10-22, scoped to the demo skills)   **gate:** green (`scripts/check`); `web/` tsc + vitest 187/187

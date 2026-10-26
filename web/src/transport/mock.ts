@@ -42,7 +42,7 @@ export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 700,
 // Plays the role of Platy's server, in the browser, from a fixed script. Nothing the child
 // types is stored: it is read once to pick the scripted reply and then dropped (P-1). The one
 // exception is a step-by-step problem's accepted lines, held in memory for the current problem
-// only and dropped at its end or any reset (R-39, A-4).
+// only and dropped at its end or any reset (R-48, A-4).
 export class MockTransport implements TutorTransport {
   readonly kind = "mock";
   private emit: (e: ServerEvent) => void = () => {};
@@ -68,7 +68,7 @@ export class MockTransport implements TutorTransport {
   private pivoted = false;
   private solved = 0;
   private nudge = 0;
-  /** The accepted lines of a step-by-step problem (R-39), dropped with the problem. */
+  /** The accepted lines of a step-by-step problem (R-48), dropped with the problem. */
   private stepLines: string[] = [];
 
   // Puzzles (R-37). While one runs, `current` is null and `returnTo` holds the problem to go
@@ -194,7 +194,7 @@ export class MockTransport implements TutorTransport {
         return;
       case "answer":
         if (this.next) return;
-        // A step-by-step problem is solved in lines; the answer alone never counts (R-39).
+        // A step-by-step problem is solved in lines; the answer alone never counts (R-48).
         if (p && event.problem_id === p.problem_id && p.format !== "steps") await this.answer(p, event.text);
         return;
       case "step":
@@ -232,7 +232,7 @@ export class MockTransport implements TutorTransport {
       await this.hint(p);
     } else if (readAnswer(text)) {
       // A child who types the answer into the chat gets it checked, not redirected. On a
-      // step-by-step problem it belongs in the next line instead (R-39).
+      // step-by-step problem it belongs in the next line instead (R-48).
       if (p.format === "steps") await this.say(STEP_IN_LINES);
       else await this.answer(p, text);
     } else if (!MATHY.test(text) && !this.redirected) {

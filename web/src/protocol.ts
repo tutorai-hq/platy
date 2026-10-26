@@ -7,7 +7,7 @@ import type { CheckId, CheckOutcome, PaletteId, Puzzle, PuzzleMove } from "./con
 export type SessionMode = "onboarding" | "tutoring";
 
 /**
- * A step-by-step line's verdict (R-39). "solved" is a valid line with x alone on one side and a
+ * A step-by-step line's verdict (R-48). "solved" is a valid line with x alone on one side and a
  * finished number on the other.
  */
 export type StepResult = "valid" | "solved" | "invalid" | "unreadable";
@@ -21,7 +21,7 @@ export interface Problem {
   instruction: string;
   /**
    * "answer": one answer box. "steps": the student writes one line at a time, and each line
-   * is checked before the next opens (R-39). The final answer alone never counts.
+   * is checked before the next opens (R-48). The final answer alone never counts.
    */
   format: "answer" | "steps";
   /**
@@ -78,7 +78,7 @@ export type ServerEvent =
   | ({ type: "problem" } & Problem)
   | { type: "answer_result"; problem_id: string; result: "correct" | "partial" | "incorrect" | "unreadable" }
   /**
-   * The verdict on step line `line` (1 is the first line under the problem, R-39). `slip` is the
+   * The verdict on step line `line` (1 is the first line under the problem, R-48). `slip` is the
    * slip-map id (R-40, web/src/content/slips.json) a wrong line matches; the browser shows its hint.
    */
   | { type: "step_result"; problem_id: string; line: number; result: StepResult; slip?: string }
@@ -116,7 +116,7 @@ export type ServerEvent =
 export type ClientEvent =
   | { type: "child_message"; text: string }
   | { type: "answer"; problem_id: string; text: string }
-  /** One line of a step-by-step solution. `line` counts from 1; the server checks it (R-39). */
+  /** One line of a step-by-step solution. `line` counts from 1; the server checks it (R-48). */
   | { type: "step"; problem_id: string; line: number; text: string }
   | { type: "hint_requested"; problem_id: string }
   /** The child chose "keep going" on the pause screen. */
