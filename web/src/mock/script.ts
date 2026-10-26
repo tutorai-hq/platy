@@ -197,6 +197,8 @@ export const NO_ANSWERS_TRY_FIRST =
   "I won't just hand it over, because working it out is what makes it stick. Give it one try first, even a guess, and then I'll help.";
 export const PUZZLE_UNREADABLE = "I couldn't read that one. Write it as an equation with x, like the lines above.";
 export const PUZZLE_NUDGE = "Give it a go in the puzzle. I'm right here if you get stuck.";
+/** After the student has answered a puzzle's reflection question and been thanked (R-03). */
+export const KEEP_GOING_READY = "Tap Keep going when you're ready.";
 export const BACK_TO_IT = "Now back to the one from before. You've got this.";
 
 // A slip on a step-by-step problem (R-39, R-40): a repair puzzle on that one move, then a fresh

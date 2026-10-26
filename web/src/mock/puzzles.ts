@@ -126,7 +126,7 @@ const watch: Item = {
     },
   },
   reflection: "In your own words: in a problem like this, what do you undo first, and why?",
-  thanks: "Thanks. Next, {player} starts one and you write the last line.",
+  thanks: "Thanks. Undoing the $+ {b}$ first is the step I asked about. Next, {player} starts one and you write the last line.",
 };
 
 // Text fills from {name} slots: the skin's words and the instance's numbers. LaTeX in here
@@ -379,7 +379,7 @@ export const WORKED_FADES: [Item, Item, Item] = [
       "Divide both sides of line 1 by ${a}$. What's left?",
     ],
     reflection: "How did you know to divide by ${a}$ for the last line?",
-    thanks: "Thanks. Next one's all yours, every step.",
+    thanks: "Thanks. Dividing by ${a}$ is what undoes the times ${a}$. Next one's all yours, every step.",
   },
   {
     ...watch,

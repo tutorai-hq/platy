@@ -66,7 +66,9 @@ by" screen, which holds until you reload the page.
 8. **Puzzles (R-37).** On problem 3, answer `25/3` (adding the 5 instead of subtracting it).
    Platy sends you to a spot-the-error puzzle about the same slip, then back to problem 3.
    Tap the wrong line, rewrite it, then finish it; Platy asks before it corrects (R-03), gives
-   no hint before a first try (R-02), and asks a reflection question at the end (R-30).
+   no hint before a first try (R-02), and asks a reflection question at the end (R-30). Answer
+   it in the chat: your words stay on screen, Platy thanks you and names the step it asked
+   about, and the puzzle waits for **Keep going** (R-03).
 
 9. **Worked examples (R-37).** Open **Demo → Worked example**. Platy shows a solved two-step
    equation a step at a time, each line with the move that made it, then asks why the first step

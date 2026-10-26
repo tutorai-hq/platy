@@ -109,6 +109,7 @@ export function PuzzlePlayer({ state, moving, onSolved, onMove, onHint, onNext, 
 
 function feedback(p: PuzzleState): { text: string; tone: "good" | "warm" } | null {
   if (p.done) {
+    if (p.explained) return { text: "Keep going when you're ready.", tone: "good" };
     // A worked example the student only read isn't something they solved.
     const well = p.puzzle.template === "worked_example" ? "Nice work!" : "Solved!";
     return { text: `${well} Answer Platy in the chat, or keep going.`, tone: "good" };

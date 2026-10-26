@@ -129,6 +129,24 @@ describe("session reducer", () => {
       expect(show(s, { ...scale, instance_id: "balance-2" }).moving).toBe(false);
     });
 
+    it("shows the student's answer to the reflection question, and notes it was answered (R-03)", () => {
+      // Teen test 2026-10-26: "I wrote my answer and it just disappeared."
+      let s = verdict(show(live(), scale), "solved", "correct");
+      expect(s.puzzle?.explained).toBe(false);
+      s = reducer(s, { type: "child_said", id: "k1", text: "you take the 5 off first" });
+      expect(s.messages.at(-1)).toEqual({ id: "k1", from: "child", text: "you take the 5 off first", streaming: false });
+      expect(s.puzzle?.explained).toBe(true);
+      s = reducer(s, { type: "server", event: { type: "tutor_message", message_id: "t1", delta: "Thanks.", done: true } });
+      expect(s.messages.map((m) => m.from)).toEqual(["child", "tutor"]);
+      // It goes with the page at the next reset (A-4), not before.
+      expect(reducer(s, { type: "server", event: { type: "reset", reason: "problem_end" } }).messages).toEqual([]);
+    });
+
+    it("doesn't count a message mid-puzzle as the reflection answer", () => {
+      const s = reducer(show(live(), scale), { type: "child_said", id: "k1", text: "help" });
+      expect(s.puzzle?.explained).toBe(false);
+    });
+
     it("ignores verdicts for another puzzle", () => {
       const s = show(live(), scale);
       const other = reducer(s, { type: "server", event: { type: "puzzle_result", instance_id: "x", check: "solved", outcome: "correct" } });

@@ -33,6 +33,8 @@ export interface PuzzleState {
   /** The move waiting for the server's verdict. The player takes no other move meanwhile. */
   pending: PuzzleMove | null;
   done: boolean;
+  /** The student has answered the reflection question since the puzzle was done (R-03). */
+  explained: boolean;
 }
 
 /**
@@ -140,6 +142,8 @@ export function reducer(state: SessionState, action: Action): SessionState {
       return {
         ...state,
         messages: [...state.messages, { id: action.id, from: "child", text: action.text, streaming: false }],
+        // Once a puzzle is done, anything they say answers its reflection question.
+        puzzle: state.puzzle?.done ? { ...state.puzzle, explained: true } : state.puzzle,
       };
     case "answer_sent":
       // Clear the last verdict so the next one shows even if it's the same.
@@ -266,7 +270,7 @@ function onPuzzle(current: PuzzleState | null, puzzle: Puzzle): PuzzleState {
   // The same instance again is only a new look (R-38): keep where the student is.
   if (current?.puzzle.instance_id === puzzle.instance_id) return { ...current, puzzle };
   const pans = puzzle.template === "balance" ? puzzle.start : null;
-  return { puzzle, outcomes: {}, last: null, pans, pending: null, done: false };
+  return { puzzle, outcomes: {}, last: null, pans, pending: null, done: false, explained: false };
 }
 
 function onVerdict(p: PuzzleState, check: CheckId, outcome: CheckOutcome): PuzzleState {

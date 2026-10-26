@@ -141,6 +141,7 @@ describe("MockTransport", () => {
       await h.send({ type: "puzzle_move", instance_id: id, move: { check: "final_answer", text: String(answer) } });
       expect(h.said(mark).join(" ")).toContain("What made you suspect that line?");
       await h.send({ type: "child_message", text: "the minus looked off" });
+      await h.send({ type: "puzzle_next", instance_id: id });
       expect(h.events).toContainEqual({ type: "puzzle_done", instance_id: id });
       expect(h.problems()).toEqual(["p1", "p1"]);
       expect(h.said().join(" ")).toContain("back to the one from before");
@@ -339,6 +340,7 @@ describe("MockTransport", () => {
       expect(finish.p.steps.map((s) => s !== null)).toEqual([true, false]);
       await move(finish.p.instance_id, { check: "final_answer", text: `x = ${finish.answer}` });
       await h.send({ type: "child_message", text: "ready" });
+      await h.send({ type: "puzzle_next", instance_id: finish.p.instance_id });
 
       const solo = latest();
       expect(solo.p.steps).toEqual([null, null]);
@@ -366,6 +368,43 @@ describe("MockTransport", () => {
       await h.send({ type: "puzzle_next", instance_id: id });
       expect(h.events).toContainEqual({ type: "puzzle_done", instance_id: id });
       expect(h.problems()).toEqual(["p1", "p1"]);
+    });
+  });
+
+  describe("self-explanation (R-03, teen test 2026-10-26)", () => {
+    // A tester answered "what do you undo first, and why?" and the screen moved on at once,
+    // wiping their words and Platy's reply.
+    const explained = async () => {
+      const h = harness();
+      await h.settle();
+      h.t.demo("worked_example");
+      await h.settle();
+      const p = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0]!;
+      if (p.template !== "worked_example") throw new Error("expected a worked example");
+      const b = /\+ (\d+) =/.exec(p.equation)![1]!;
+      await h.send({ type: "puzzle_move", instance_id: p.instance_id, move: { check: "why", choice: p.why!.choices.findIndex((t) => t.startsWith("It undoes")) } });
+      expect(h.said().join(" ")).toContain("In your own words");
+      return { h, id: p.instance_id, b };
+    };
+
+    it("answers the student's why, naming the step it asked about, and stays on the puzzle", async () => {
+      const { h, b } = await explained();
+      const mark = h.events.length;
+      await h.send({ type: "child_message", text: "you do the plus first becuse it is alone" });
+      expect(h.said(mark)).toEqual([`Thanks. Undoing the $+ ${b}$ first is the step I asked about. Next, Ade starts one and you write the last line.`]);
+      expect(h.events.slice(mark).map((e) => e.type)).not.toContain("reset");
+      expect(h.events.slice(mark).map((e) => e.type)).not.toContain("puzzle_done");
+    });
+
+    it("moves on only when the student taps Keep going", async () => {
+      const { h, id } = await explained();
+      await h.send({ type: "child_message", text: "because it's added last" });
+      let mark = h.events.length;
+      await h.send({ type: "child_message", text: "ok" });
+      expect(h.said(mark)).toEqual(["Tap Keep going when you're ready."]);
+      mark = h.events.length;
+      await h.send({ type: "puzzle_next", instance_id: id });
+      expect(h.events.slice(mark)).toContainEqual({ type: "puzzle_done", instance_id: id });
     });
   });
 
@@ -470,6 +509,7 @@ describe("MockTransport", () => {
       await h.send({ type: "puzzle_move", instance_id: id, move: { check: "fixed_step", text: `${a}x = ${c + b}` } });
       await h.send({ type: "puzzle_move", instance_id: id, move: { check: "final_answer", text: String((c + b) / a) } });
       await h.send({ type: "child_message", text: "the minus sign" });
+      await h.send({ type: "puzzle_next", instance_id: id });
 
       // Not back to 2x + 5 = 17: a fresh generated problem of the same kind takes its place.
       const fresh = h.events.filter((e) => e.type === "problem").at(-1);

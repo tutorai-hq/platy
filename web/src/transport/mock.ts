@@ -10,7 +10,7 @@ import {
   toWire,
 } from "../mock/puzzles";
 import {
-  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
+  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
   OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
   PUZZLE_UNREADABLE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SHOW_ONE, STEP_IN_LINES,
   STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
@@ -67,6 +67,8 @@ export class MockTransport implements TutorTransport {
   private colors: PaletteId | null = null;
   private puzzleNudge: string | null = null;
   private reflecting = false;
+  /** The student answered the reflection question, and Platy has thanked them for it. */
+  private thanked = false;
   private repaired = false;
   /** The running puzzle repairs a step slip, so a fresh problem follows it. */
   private confirm = false;
@@ -369,6 +371,7 @@ export class MockTransport implements TutorTransport {
     this.probe = null;
     this.gap = null;
     this.reflecting = false;
+    this.thanked = false;
     this.puzzleNudge = null;
     this.stepLines = [];
     this.out({ type: "topic_switch", label: "Quick confidence builder" });
@@ -445,6 +448,7 @@ export class MockTransport implements TutorTransport {
     this.awaitingWhy = false;
     this.puzzleNudge = null;
     this.reflecting = false;
+    this.thanked = false;
     if (lead) await this.say(lead);
     this.out({ type: "topic_switch", label: template === "worked_example" ? "Worked example" : "Quick puzzle" });
     this.out({ type: "reset", reason: "topic_switch" });
@@ -525,8 +529,14 @@ export class MockTransport implements TutorTransport {
 
   private async puzzleChat(live: LivePuzzle, text: string): Promise<void> {
     if (this.reflecting) {
-      await this.say(line(live, this.skin(), (i) => i.thanks));
-      await this.finishPuzzle();
+      // Answer their "why", then stay: the reply and their own words stay on screen until they
+      // tap Keep going (R-03). Teen test 2026-10-26: moving on at once wiped both.
+      if (this.thanked) {
+        await this.say(KEEP_GOING_READY);
+      } else {
+        this.thanked = true;
+        await this.say(line(live, this.skin(), (i) => i.thanks));
+      }
     } else if (this.puzzleNudge) {
       const nudge = this.puzzleNudge;
       this.puzzleNudge = null;
@@ -547,6 +557,7 @@ export class MockTransport implements TutorTransport {
     this.out({ type: "puzzle_done", instance_id: live.instance_id });
     this.puzzle = null;
     this.reflecting = false;
+    this.thanked = false;
     this.puzzleNudge = null;
     await this.sleep(this.timing.resetMs);
     this.out({ type: "reset", reason: "problem_end" });
