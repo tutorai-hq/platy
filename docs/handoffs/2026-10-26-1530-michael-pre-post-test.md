@@ -9,7 +9,7 @@
 - **The two forms** are in `web/src/mock/pretest.ts`.
   - Each is two rounds through the skills, easiest first, so the same skill never comes twice in a row.
   - Both forms are fixed, so every student sits the same two tests.
-  - Each post question is the same kind as the pre question in its slot: same layout, signs and number sizes, with new numbers. Michael's yes on this is pending (below).
+  - Each post question is the same kind as the pre question in its slot: same layout, signs and number sizes, with new numbers. Michael approved this on 2026-10-26, and R-26 records it.
   - No post question repeats a pre question, however it's written.
 - **One checker for both forms** (`gradeTestAnswer`). Only a finished number counts: `-3`, `x = -3`, `-3 = x` or a fraction in lowest terms. Retyping the question, or leaving the working unfinished (`-24/8`), doesn't count.
 - **`TestRunner`** (`web/src/components/TestRunner.tsx`):
@@ -45,7 +45,7 @@
 - **Scope:** 11 keep.
 - **Scope, dismissed:**
   - Shrinking the score to the total only: the per-skill counts are the YC per-node proof.
-- **Scope, open with Michael:** matched post forms. A card is posted; it's kept as built until he answers.
+- **Scope, decided by Michael:** matched post forms, approved on a card on 2026-10-26.
 - **Privacy:** 0 findings (answers only in a ref, dropped at the score; nothing stored, logged or sent).
 - **Code review:** two fixes.
   - With a failing test first: unsimplified answers counted, including the question retyped.
@@ -61,6 +61,5 @@
 - `MathInput`'s preview crashes on very deep nesting (pre-existing). Cap the input length or catch it in `childMathToLatex`.
 
 ## Next steps
-1. Michael: answer the matched-forms card.
-2. Michael: run `/codex:adversarial-review --wait Check against PRIVACY.md. Find any path where conversation content, audio, photos or PII escapes the gateway.` on prompts 1 to 7.
-3. Michael: do the iPhone keypad test.
+1. Michael: run `/codex:adversarial-review --wait Check against PRIVACY.md. Find any path where conversation content, audio, photos or PII escapes the gateway.` on prompts 1 to 7.
+2. Michael: do the iPhone keypad test.
