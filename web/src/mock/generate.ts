@@ -87,6 +87,10 @@ export interface MissingInstance extends Numbers {
   slip: string;
   /** "last": the first step is shown and the last line is blank (a repair item's variant). */
   blank?: "last";
+  /** A "last" blank's known wrong lines (R-40): the value each slip gives and the ask to use. */
+  slips?: { value: number; key: string }[];
+  /** Words for the item's text slots that depend on the instance, like which way to undo. */
+  vars?: Record<string, string | number>;
 }
 
 export function missingStep(rng: Rng): MissingInstance {
@@ -489,6 +493,55 @@ export function lastStep(rng: Rng, level: Level, avoid: readonly string[] = []):
       slip: `x = ${c - b - a}`,
       blank: "last",
     };
+  });
+}
+
+export type OneStepKind = "multiply" | "sign" | "direction";
+
+const isWhole = (v: number) => near(v, Math.round(v));
+
+/**
+ * A one-step equation with its one line left for the student (a repair item's variant):
+ * "x/k = c" (multiply both sides by k), "-ax = c" (divide, and keep the sign) or "x + b = c"
+ * (undo the adding or the taking away). Numbers come from the one-step generator at the
+ * student's level, capped at 2 because level 3 is about fraction answers, not this one move;
+ * the sign variant needs level 2, where the number in front of x can be negative.
+ */
+export function oneStepLine(rng: Rng, kind: OneStepKind, level: Level, avoid: readonly string[] = []): MissingInstance {
+  const at: Level = kind === "sign" || level === 3 ? 2 : level;
+  return draw(rng, (r): MissingInstance | null => {
+    const p = makeProblem("one_step_equations", at, r);
+    if (isOneOf(p.prompt, avoid)) return null;
+    const { a, b, c, answer } = numbersOf(p);
+    const linesLatex: (string | null)[] = [null];
+    const base = { a, b, c, answer, equation: p.prompt, latex: p.prompt, linesLatex, expected: `x = ${answer}`, blank: "last" as const };
+    switch (kind) {
+      case "multiply": {
+        // x/k = c: the slope a is 1/k. No number on screen is the answer.
+        const k = Math.round(1 / a);
+        if (!near(b, 0) || a <= 0 || a >= 1 || !near(a * k, 1) || [k, c, -c].includes(answer)) return null;
+        return { ...base, slip: `x = ${c / k}`, slips: [{ value: c / k, key: "divided_again" }], vars: { k } };
+      }
+      case "sign":
+        if (!near(b, 0) || a >= 0 || !isWhole(a) || [a, -a, c, -c].includes(answer)) return null;
+        return { ...base, slip: `x = ${-answer}`, slips: [{ value: -answer, key: "sign_dropped" }] };
+      case "direction": {
+        if (!near(a, 1) || near(b, 0) || [Math.abs(b), c, -c].includes(answer)) return null;
+        const added = b > 0;
+        const n = Math.abs(b);
+        return {
+          ...base,
+          slip: `x = ${c + b}`,
+          slips: [{ value: c + b, key: "same_op" }],
+          vars: {
+            b_abs: n,
+            done: added ? "added to x" : "taken away from x",
+            done_noun: added ? "adding" : "taking away",
+            undo_move: added ? `Take $${n}$ away from` : `Add $${n}$ to`,
+          },
+        };
+      }
+    }
   });
 }
 

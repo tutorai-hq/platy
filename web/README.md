@@ -89,8 +89,9 @@ by" screen, which holds until you reload the page.
    write `2x = 99`, and Platy probes one level down (`x - 8 = -3`, answer `-11`), then one more
    (`x - 4 + b = x`, answer `-4`). That's the gap: a worked example teaches it, three fades
    (**Demo → Skip** moves through them). Back on `2x + 5 = 17`, write `2x = 22`: a repair puzzle
-   on that one move, then a fresh generated problem confirms the fix. A right answer on a probe
-   ends the probing early and goes back to the problem.
+   on that one move, then a fresh generated problem confirms the fix. Writing `2x = 12` and then
+   `x = 10` instead opens the one-step repair, a balance scale for `ax = c`, because that slip is one
+   skill down. A right answer on a probe ends the probing early and goes back to the problem.
 
 11. **"Your map" (R-13).** **End session** (or the end of the lesson) shows the whole skill map,
    drawn from `skill_map.json`. Today's skills fill in one by one, foundations first, then the next

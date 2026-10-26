@@ -158,8 +158,9 @@ describe("repair items", () => {
     }
   });
 
-  it("has a repair item for every inverse operations and two-step slip", () => {
-    for (const s of SLIPS.filter((x) => x.node === "inverse_operations" || x.node === "two_step_equations")) {
+  it("has a repair item for every inverse operations, one-step and two-step slip", () => {
+    const built = ["inverse_operations", "one_step_equations", "two_step_equations"];
+    for (const s of SLIPS.filter((x) => built.includes(x.node))) {
       expect(itemFor(s.repair), s.id).not.toBeNull();
     }
   });

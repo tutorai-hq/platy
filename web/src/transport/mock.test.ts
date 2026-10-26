@@ -5,7 +5,7 @@ import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { answerExample } from "../mock/answers";
-import { EXPLAIN_FIRST, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON } from "../mock/script";
+import { EXPLAIN_FIRST, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD } from "../mock/script";
 import { type MockTiming, MockTransport } from "./mock";
 
 const FAST: MockTiming = { thinkMs: 0, wordMs: 0, resetMs: 0 };
@@ -583,12 +583,58 @@ describe("MockTransport", () => {
       const h = await probed();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
-      // Line 2: a one-step slip on a two-step problem, the gap one level down. Its repair item
-      // isn't built yet, so the hint on the line is all that happens.
+      // Line 2: a one-step slip on a two-step problem, the gap one level down. Its repair puzzle
+      // is offered, and waits for the tap (R-01).
       await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 10" });
       const slips = h.events.slice(h.from).filter((e) => e.type === "step_result").map((e) => (e.type === "step_result" ? (e.slip ?? null) : null));
       expect(slips).toEqual([null, null, "coefficient_subtracted"]);
+      expect(h.events.slice(h.from).some((e) => e.type === "next_up")).toBe(true);
       expect(h.events.some((e) => e.type === "puzzle")).toBe(false);
+    });
+
+    it("sends a one-step slip on line 2 to the one-step repair, then confirms the fix on a fresh problem (R-37, R-41)", async () => {
+      const h = await probed();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
+      await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 10" });
+      expect(h.said(h.from)).toContain(STEP_REPAIR_LEAD);
+      await h.cont();
+      const puzzle = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
+      if (puzzle?.template !== "balance") throw new Error("expected the balance-scale repair");
+      expect(puzzle.item_id).toBe("repair-one-step-coefficient");
+      expect(puzzle.skill_id).toBe("one_step_equations");
+      // Never the line they slipped on: the scale would walk them to x = 6 (R-02).
+      expect(isOneOf(puzzle.equation, ["2x = 12", ...STEP_LESSON.map((p) => p.prompt)]), puzzle.equation).toBe(false);
+      expect(puzzle.start.left.units).toBe(0);
+      const id = puzzle.instance_id;
+      await h.send({ type: "puzzle_move", instance_id: id, move: { check: "move", move: { op: "split", groups: puzzle.start.left.x } } });
+      expect(h.events.filter((e) => e.type === "puzzle_result").at(-1)).toMatchObject({ check: "solved", outcome: "correct" });
+      await h.send({ type: "child_message", text: "i split them" });
+      await h.send({ type: "puzzle_next", instance_id: id });
+
+      // A fresh two-step problem takes the place of 2x + 5 = 17.
+      const fresh = h.events.filter((e) => e.type === "problem").at(-1);
+      if (fresh?.type !== "problem") throw new Error("expected a problem");
+      expect(fresh).toMatchObject({ problem_id: "g1", skill_id: "two_step_equations", format: "steps" });
+      expect(h.problems()).toEqual(["s1", "one_step_equations.1", "s1", "g1"]);
+      // Once per session: a second slip gets the question, not another puzzle.
+      const [, ca, sign, cb, cc] = /^(-?\d+)x ([+-]) (\d+) = (-?\d+)$/.exec(fresh.prompt) ?? [];
+      const b = (sign === "-" ? -1 : 1) * Number(cb);
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "g1", line: 1, text: `${ca}x = ${Number(cc) + b}` });
+      expect(h.events.slice(mark).some((e) => e.type === "next_up" || e.type === "puzzle")).toBe(false);
+    });
+
+    it("never builds the one-step repair on a line from the lesson (R-02)", async () => {
+      const avoid = ["2x = 12", ...STEP_LESSON.map((p) => p.prompt)];
+      for (let seed = 1; seed <= 25; seed++) {
+        const h = await probed(seed);
+        await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
+        await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 10" });
+        await h.cont();
+        const puzzle = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
+        if (puzzle?.template !== "balance") throw new Error("expected the balance-scale repair");
+        expect(isOneOf(puzzle.equation, avoid), `${seed}: ${puzzle.equation}`).toBe(false);
+      }
     });
 
     it("sends a slip on 2x + 5 = 17 to its repair puzzle, then confirms the fix on a fresh problem (R-37, R-41)", async () => {

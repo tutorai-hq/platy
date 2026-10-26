@@ -5,9 +5,7 @@
     "repair-integer-signs",
     "repair-integer-subtraction",
     "repair-order-precedence",
-    "repair-order-brackets",
-    "repair-one-step-direction",
-    "repair-one-step-coefficient"
+    "repair-order-brackets"
   ],
   "slips": [
     {
@@ -158,7 +156,7 @@
       "name": "Divided when x was already divided",
       "rule": "x divided by a whole number equals a number, and the student wrote x alone equal to the right side divided by it again.",
       "hint": "Here x is being divided. Is dividing again the way to undo that?",
-      "repair": "repair-one-step-coefficient",
+      "repair": "repair-one-step-multiply",
       "examples": [
         { "prev": "x/4 = 6", "next": "x = 1.5" },
         { "prev": "x/3 = 5", "next": "x = 5/3" }
@@ -198,7 +196,7 @@
       "name": "Lost the minus sign on the number in front of x",
       "rule": "A negative number times x (plus or minus a number) equals a number, and the student wrote x alone equal to the answer for a positive number in front of x.",
       "hint": "Look at the number next to x, sign and all. Did all of it make it into your line?",
-      "repair": "repair-one-step-coefficient",
+      "repair": "repair-one-step-sign",
       "examples": [
         { "prev": "-5x = 35", "next": "x = 7" },
         { "prev": "-2x = 8", "next": "x = 4" },

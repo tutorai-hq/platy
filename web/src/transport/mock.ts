@@ -347,8 +347,11 @@ export class MockTransport implements TutorTransport {
           this.repaired = true;
           this.confirm = true;
           this.think("repair", "slip_repair", node);
+          // The puzzle never uses a line of this solution ("2x = 12" under "2x + 5 = 17"), or it
+          // would walk the student to this problem's answer (R-02).
+          const lines = [...this.stepLines];
           await this.say(STEP_REPAIR_LEAD);
-          this.offer(DETOUR_PUZZLE, () => this.startPuzzle(item.template, null, item.item_id));
+          this.offer(DETOUR_PUZZLE, () => this.startPuzzle(item.template, null, item.item_id, lines));
         } else if (this.misses >= 3 && !this.pivoted) {
           await this.suggestPause(); // R-21, as for a problem's answers
         } else if (this.misses === 1) {
@@ -460,7 +463,7 @@ export class MockTransport implements TutorTransport {
    * `item` picks a specific item, such as a slip's repair; otherwise the template's own. `lead` is
    * said first, unless it was said already, before the student tapped on to the puzzle.
    */
-  private async startPuzzle(template: PuzzleTemplate, lead: string | null, item?: string): Promise<void> {
+  private async startPuzzle(template: PuzzleTemplate, lead: string | null, item?: string, avoid: readonly string[] = []): Promise<void> {
     if (!this.puzzle) this.returnTo = this.current;
     this.current = null;
     this.stepLines = []; // the reset below clears them from the screen too
@@ -472,14 +475,15 @@ export class MockTransport implements TutorTransport {
     this.out({ type: "topic_switch", label: template === "worked_example" ? "Worked example" : "Quick puzzle" });
     this.out({ type: "reset", reason: "topic_switch" });
     await this.sleep(this.timing.resetMs);
-    await this.showPuzzle(template, 0, item);
+    await this.showPuzzle(template, 0, item, avoid);
   }
 
-  private async showPuzzle(template: PuzzleTemplate, fade: Fade = 0, item?: string): Promise<void> {
+  /** `avoid` lists lines a repair must not use, on top of the lesson's problems (R-02). */
+  private async showPuzzle(template: PuzzleTemplate, fade: Fade = 0, item?: string, avoid: readonly string[] = []): Promise<void> {
     this.puzzles++;
     const rng = seeded(this.seed + this.puzzles);
     const id = `${template}-${this.puzzles}`;
-    const live = item ? newItemPuzzle(item, rng, id, this.level, this.lessonPrompts()) : newPuzzle(template, rng, id, fade);
+    const live = item ? newItemPuzzle(item, rng, id, this.level, [...this.lessonPrompts(), ...avoid]) : newPuzzle(template, rng, id, fade);
     this.puzzle = live;
     await this.say(line(live, this.skin(), (i) => i.intro));
     this.out({ type: "puzzle", puzzle: toWire(live, this.skin()) });

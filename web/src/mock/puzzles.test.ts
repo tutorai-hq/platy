@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PALETTE } from "../content/palette";
 import type { PuzzleMove, PuzzleTemplate, Skin } from "../content/types";
-import { isOneOf, type Level, seeded } from "./generate";
+import { isOneOf, type Level, LEVELS, seeded } from "./generate";
 import { hasSolution } from "./grade";
 import {
   type Fade, gradeMove, INTERESTS, ITEMS, line, type LivePuzzle, newItemPuzzle, newPuzzle, nextHint, REPAIRS, SKINS, skinFor,
@@ -435,6 +435,126 @@ describe("repair items", () => {
       const v = play(p, { check: "move", move: { op: "split", groups: p.n.a + 1 } });
       expect(v?.outcome).toBe("incorrect");
       expect(v?.ask?.ask).toContain(`$${p.n.a + 1}$ groups`);
+    });
+  });
+
+  // The one-step slips (R-40). The scale takes "ax = c"; the other forms are one-line items.
+  describe("one-step coefficient (balance scale)", () => {
+    it("shows a times-x scale with nothing loose on its side: one split, then x is alone", () => {
+      for (let seed = 1; seed <= 50; seed++) {
+        const p = repair<"balance">("repair-one-step-coefficient", seed);
+        expect(p.item.skill_id).toBe("one_step_equations");
+        expect(p.n.start.left).toEqual({ x: p.n.a, units: 0 });
+        expect(p.n.answer).not.toBe(p.n.a);
+        expect(p.n.start.right.units).toBeLessThanOrEqual(30);
+        expect(play(p, { check: "move", move: { op: "split", groups: p.n.a } })).toMatchObject({ outcome: "correct", solved: true });
+      }
+    });
+
+    it("asks what undoes times when the student tries to take the number away", () => {
+      const p = repair<"balance">("repair-one-step-coefficient");
+      const v = play(p, { check: "move", move: { op: "remove_units", n: p.n.a } });
+      expect(v?.outcome).toBe("incorrect");
+      expect(v?.ask?.nudge).toContain("what undoes times");
+      expect(play(p, { check: "move", move: { op: "split", groups: p.n.a + 1 } })?.ask?.ask).toContain(`$${p.n.a + 1}$ groups`);
+    });
+  });
+
+  describe("one-step multiply (the one line)", () => {
+    it("shows x divided by a number and leaves the line for the student", () => {
+      for (const level of LEVELS) {
+        for (let seed = 1; seed <= 50; seed++) {
+          const p = repair<"missing_step">("repair-one-step-multiply", seed, level);
+          const m = /^x\/(\d+) = (-?\d+)$/.exec(p.n.equation);
+          expect(m, p.n.equation).not.toBeNull();
+          const [k, c] = [Number(m![1]), Number(m![2])];
+          expect(p.n.linesLatex).toEqual([null]);
+          expect(p.n.answer).toBe(k * c);
+          expect([k, c]).not.toContain(p.n.answer);
+          expect(line(p, skin, (i) => i.instructions)).toContain(`divided by $${k}$`);
+        }
+      }
+    });
+
+    it("asks about dividing again, and about a line that isn't finished", () => {
+      const p = repair<"missing_step">("repair-one-step-multiply");
+      const { c, answer } = p.n;
+      const k = Math.round(1 / p.n.a);
+      expect(play(p, { check: "missing_line", text: `x = ${c / k}` })?.ask?.ask).toContain("What did your line do to it?");
+      expect(play(p, { check: "missing_line", text: String(c / k) })?.ask?.ask).toContain("What did your line do to it?");
+      expect(play(p, { check: "missing_line", text: `x/${k} = ${c}` })?.ask?.ask).toBe("That line's true. What does x equal?");
+      const done = play(p, { check: "missing_line", text: `x = ${answer}` });
+      expect(done).toMatchObject({ outcome: "correct", solved: true });
+      expect(done?.reply).toContain(`$x = ${answer}$`);
+    });
+
+    it("has negatives at level 2 and small positive numbers at level 1", () => {
+      const level2 = Array.from({ length: 100 }, (_, i) => repair<"missing_step">("repair-one-step-multiply", i + 1, 2).n);
+      expect(level2.some((n) => n.c < 0)).toBe(true);
+      for (let seed = 1; seed <= 100; seed++) {
+        const { c, answer } = repair<"missing_step">("repair-one-step-multiply", seed, 1).n;
+        expect(c > 0 && answer > 0).toBe(true);
+      }
+    });
+  });
+
+  describe("one-step sign (the one line)", () => {
+    it("shows a negative number times x, and never the answer", () => {
+      for (const level of LEVELS) {
+        for (let seed = 1; seed <= 50; seed++) {
+          const p = repair<"missing_step">("repair-one-step-sign", seed, level);
+          expect(p.n.equation).toMatch(/^-\d+x = -?\d+$/);
+          expect(p.n.linesLatex).toEqual([null]);
+          expect(hasSolution(p.n.equation, p.n.answer)).toBe(true);
+          expect([p.n.a, -p.n.a, p.n.c, -p.n.c]).not.toContain(p.n.answer);
+        }
+      }
+    });
+
+    it("asks about the sign when the answer lost it", () => {
+      const p = repair<"missing_step">("repair-one-step-sign");
+      const { answer } = p.n;
+      expect(play(p, { check: "missing_line", text: `x = ${-answer}` })?.ask?.ask).toContain("sign and all");
+      expect(play(p, { check: "missing_line", text: String(-answer) })?.ask?.ask).toContain("sign and all");
+      const done = play(p, { check: "missing_line", text: `x = ${answer}` });
+      expect(done).toMatchObject({ outcome: "correct", solved: true });
+      expect(done?.reply).toContain("sign and all");
+    });
+  });
+
+  describe("one-step direction (the one line)", () => {
+    it("shows x plus or minus a number, and says which way to undo it", () => {
+      for (const level of LEVELS) {
+        for (let seed = 1; seed <= 50; seed++) {
+          const p = repair<"missing_step">("repair-one-step-direction", seed, level);
+          const m = /^x ([+-]) (\d+) = (-?\d+)$/.exec(p.n.equation);
+          expect(m, p.n.equation).not.toBeNull();
+          const instructions = line(p, skin, (i) => i.instructions);
+          expect(instructions).toContain(m![1] === "+" ? "added to x" : "taken away from x");
+          expect(instructions).toContain(`$${m![2]}$`);
+          expect(p.n.linesLatex).toEqual([null]);
+          expect(hasSolution(p.n.equation, p.n.answer)).toBe(true);
+          expect([Number(m![2]), Number(m![3])]).not.toContain(p.n.answer);
+        }
+      }
+    });
+
+    it("asks about doing it again instead of undoing it", () => {
+      const p = repair<"missing_step">("repair-one-step-direction");
+      const { b, c, answer } = p.n;
+      expect(play(p, { check: "missing_line", text: `x = ${c + b}` })?.ask?.ask).toContain("What did your line do");
+      expect(play(p, { check: "missing_line", text: `x = ${answer}` })).toMatchObject({ outcome: "correct", solved: true });
+      p.hints = 2;
+      expect(nextHint(p, skin)).toMatch(b > 0 ? /^Take \$\d+\$ away from both sides/ : /^Add \$\d+\$ to both sides/);
+    });
+
+    it("has negatives at level 2 and small positive numbers at level 1", () => {
+      const level2 = Array.from({ length: 100 }, (_, i) => repair<"missing_step">("repair-one-step-direction", i + 1, 2).n);
+      expect(level2.some((n) => n.c < 0 || n.answer < 0)).toBe(true);
+      for (let seed = 1; seed <= 100; seed++) {
+        const { c, answer } = repair<"missing_step">("repair-one-step-direction", seed, 1).n;
+        expect(c > 0 && answer > 0).toBe(true);
+      }
     });
   });
 });

@@ -4,8 +4,8 @@ import type {
   CheckId, CheckOutcome, PaletteId, Pans, Puzzle, PuzzleMove, PuzzleTemplate, Skin, WorkedExamplePuzzle,
 } from "../content/types";
 import {
-  balance, type BalanceInstance, isOneOf, lastStep, type Level, type MissingInstance, missingStep, oneStepBalance, type Rng,
-  type SpotInstance, spotTheError, type WorkedInstance, workedExample,
+  balance, type BalanceInstance, isOneOf, lastStep, type Level, type MissingInstance, missingStep, oneStepBalance, oneStepLine,
+  type Rng, type SpotInstance, spotTheError, type WorkedInstance, workedExample,
 } from "./generate";
 import { bareNumber, hasSolution, readable, sameLine } from "./grade";
 
@@ -357,6 +357,141 @@ export const REPAIRS: Record<string, Item> = {
     reflection: "The {containers} stood for a number times x. How did you undo the times, and why does the scale stay level?",
     thanks: "Thanks. Multiplying is undone by dividing, the same on both sides.",
   },
+  // multiplied_instead_of_divided and coefficient_subtracted: "ax = c" on the scale, where the
+  // only move that works is the split. The scale can't draw a negative number in front of x
+  // or an x that's divided, so those two slips have their own items below.
+  "repair-one-step-coefficient": {
+    item_id: "repair-one-step-coefficient",
+    template: "balance",
+    skill_id: "one_step_equations",
+    intro: "A balance scale: {containers} on one side, loose {units} on the other. Every {container} holds the same number of {units}.",
+    instructions: "Get one {container} alone without tipping the scale.",
+    hints: [
+      "How many {containers} are on the scale? That's the number next to x, and it multiplies x.",
+      "There's nothing loose to take away on the {containers} side. What else can you do to both sides?",
+      "Split both sides into ${a}$ equal groups.",
+    ],
+    replies: {
+      solved: "Level, and one {container} is alone: it holds {answer_units}, so $x = {answer}$. Dividing by ${a}$ undid the times ${a}$.",
+    },
+    asks: {
+      uneven_x: {
+        ask: "How many {containers} would go in each group if you split both sides into ${g}$ groups?",
+        nudge: "Try a number of groups that shares the {containers} out evenly.",
+      },
+      uneven_units: {
+        ask: "What happens to the loose {units} if you split both sides into ${g}$ groups?",
+        nudge: "A split has to share both sides out evenly. How many {containers} are there?",
+      },
+      too_many: {
+        ask: "How many loose {units} are on the side with the {containers}?",
+        nudge: "There are none to take away there. The {containers} stand for a number times x, so what undoes times?",
+      },
+      nothing: {
+        ask: "What would you like to do to both sides?",
+        nudge: "Try splitting both sides into equal groups.",
+      },
+    },
+    reflection: "The number next to x multiplies it. How did you undo that on the scale, and why on both sides?",
+    thanks: "Thanks. A number next to x multiplies it, so dividing is what undoes it, on both sides.",
+  },
+  // divided_instead_of_multiplied: x/k = c, and the student writes the one line.
+  "repair-one-step-multiply": {
+    item_id: "repair-one-step-multiply",
+    template: "missing_step",
+    skill_id: "one_step_equations",
+    intro: "{player} from the {team} wrote this one down and stopped. Finish it.",
+    instructions: "Here x is divided by ${k}$. Write the line with x alone on one side.",
+    hints: [
+      "What's being done to x in the problem?",
+      "x is divided by ${k}$. What's the opposite of dividing?",
+      "Multiply both sides by ${k}$. What's left?",
+    ],
+    replies: {
+      missing_line: "Yes, $x = {answer}$. Multiplying by ${k}$ undid the dividing.",
+    },
+    asks: {
+      divided_again: {
+        ask: "The problem divides x by ${k}$. What did your line do to it?",
+        nudge: "Dividing again doesn't undo dividing. What does?",
+      },
+      not_alone: {
+        ask: "That line's true. What does x equal?",
+        nudge: "What's still being done to $x$ in that line?",
+      },
+      final_other: {
+        ask: "How did you get that from the problem?",
+        nudge: "What's being done to $x$ in the problem, and what undoes it?",
+      },
+    },
+    reflection: "x was divided by a number. How did you undo that, and how could you check your answer?",
+    thanks: "Thanks. Dividing is undone by multiplying, and putting the answer back in checks it.",
+  },
+  // coefficient_sign_dropped: -ax = c, and the sign has to come along.
+  "repair-one-step-sign": {
+    item_id: "repair-one-step-sign",
+    template: "missing_step",
+    skill_id: "one_step_equations",
+    intro: "{player} from the {team} got stuck on the sign in this one. Finish it.",
+    instructions: "Look at the number next to x, sign and all. Write the line with x alone on one side.",
+    hints: [
+      "What's being done to x, including the sign?",
+      "x is multiplied by ${a}$, a negative number. What undoes that?",
+      "Divide both sides by ${a}$, and keep the sign. What's left?",
+    ],
+    replies: {
+      missing_line: "Yes, $x = {answer}$. Dividing by ${a}$ undid the times ${a}$, sign and all.",
+    },
+    asks: {
+      sign_dropped: {
+        ask: "What number is x multiplied by here, sign and all?",
+        nudge: "The sign is part of that number. Does dividing by it change the sign of the answer?",
+      },
+      not_alone: {
+        ask: "That line's true. What does x equal?",
+        nudge: "What's still being done to $x$ in that line?",
+      },
+      final_other: {
+        ask: "How did you get that from the problem?",
+        nudge: "What's being done to $x$ in the problem, and what undoes it?",
+      },
+    },
+    reflection: "The number next to x had a minus sign. What did that change about the answer?",
+    thanks: "Thanks. The sign belongs to the number next to x, so it comes along when you divide.",
+  },
+  // add_subtract_wrong_direction: x + b = c or x - b = c, with the instructions naming which
+  // way to undo, and the student writing the one line.
+  "repair-one-step-direction": {
+    item_id: "repair-one-step-direction",
+    template: "missing_step",
+    skill_id: "one_step_equations",
+    intro: "{player} from the {team} wrote this one down and stopped. Finish it.",
+    instructions: "Here ${b_abs}$ is {done}. Undo that on both sides, then write the line with x alone.",
+    hints: [
+      "What's being done to x in the problem?",
+      "${b_abs}$ is {done}. What's the opposite of that?",
+      "{undo_move} both sides. What's left?",
+    ],
+    replies: {
+      missing_line: "Yes, $x = {answer}$. That undid the {done_noun}.",
+    },
+    asks: {
+      same_op: {
+        ask: "The problem has ${b_abs}$ {done}. What did your line do with that ${b_abs}$?",
+        nudge: "Doing the same thing again doesn't undo it. What's the opposite?",
+      },
+      not_alone: {
+        ask: "That line's true. What does x equal?",
+        nudge: "What's still being done to $x$ in that line?",
+      },
+      final_other: {
+        ask: "How did you get that from the problem?",
+        nudge: "What's being done to $x$ in the problem, and what undoes it?",
+      },
+    },
+    reflection: "How did you decide whether to add or take away? Would the other way have worked?",
+    thanks: "Thanks. Undo means do the opposite: take away what was added, or add back what was taken away.",
+  },
 };
 
 /** Any item a slip can point at, by id. */
@@ -460,10 +595,17 @@ export function newItemPuzzle(
     case "repair-two-step-coefficient":
       return { ...base, item: item!, template: "missing_step", n: lastStep(rng, level, avoid) };
     case "repair-inverse-undo":
-    case "repair-inverse-divide": {
+    case "repair-inverse-divide":
+    case "repair-one-step-coefficient": {
       const n = oneStepBalance(rng, item_id === "repair-inverse-undo" ? "shift" : "split", avoid);
       return { ...base, item: item!, template: "balance", n, pans: n.start };
     }
+    case "repair-one-step-multiply":
+      return { ...base, item: item!, template: "missing_step", n: oneStepLine(rng, "multiply", level, avoid) };
+    case "repair-one-step-sign":
+      return { ...base, item: item!, template: "missing_step", n: oneStepLine(rng, "sign", level, avoid) };
+    case "repair-one-step-direction":
+      return { ...base, item: item!, template: "missing_step", n: oneStepLine(rng, "direction", level, avoid) };
   }
   const template = (Object.keys(ITEMS) as PuzzleTemplate[]).find((t) => ITEMS[t].item_id === item_id);
   if (!template) throw new Error(`no item ${item_id}`);
@@ -481,7 +623,8 @@ function vars(live: LivePuzzle, skin: Skin): Vars {
   const v: Vars = { ...w, team: skin.team_name, player: skin.player_names[0] ?? "", a, b, c, answer };
   v.answer_units = `${answer} ${answer === 1 ? w.unit : w.units}`;
   v.b_units = `${b} ${b === 1 ? w.unit : w.units}`;
-  return v;
+  // An instance's own words, like which way to undo (the one-step repairs).
+  return live.template === "missing_step" ? { ...v, ...live.n.vars } : v;
 }
 
 export function fill(text: string, v: Vars): string {
@@ -573,7 +716,7 @@ export function gradeMove(live: LivePuzzle, move: PuzzleMove, skin: Skin): Verdi
       }
       if (move.check === "final_answer" && stage === "finish") {
         const wrong = Number(n.lines[1]!.split("=")[1]);
-        const key = finalAnswer(move.text, n.answer, { value: wrong, key: "old_answer" });
+        const key = finalAnswer(move.text, n.answer, [{ value: wrong, key: "old_answer" }]);
         return key === "correct" ? pass("final_answer", true) : key === "unreadable" ? unreadable("final_answer") : miss("final_answer", key);
       }
       return null;
@@ -581,9 +724,10 @@ export function gradeMove(live: LivePuzzle, move: PuzzleMove, skin: Skin): Verdi
     case "missing_step": {
       const n = live.n;
       if (move.check !== "missing_line" || missingStage(live.outcomes) !== "fill") return null;
-      // The last line blank: x on its own, and taking the a away is the slip to ask about.
+      // The last line blank: x alone, with the instance's known wrong lines to ask about (by
+      // default, taking the a away instead of dividing by it).
       const key = n.blank === "last"
-        ? finalAnswer(move.text, n.answer, { value: n.c - n.b - n.a, key: "subtracted_a" })
+        ? finalAnswer(move.text, n.answer, n.slips ?? [{ value: n.c - n.b - n.a, key: "subtracted_a" }])
         : firstMove(move.text, n);
       if (key === "correct") return pass("missing_line", true);
       return key === "unreadable" ? unreadable("missing_line") : miss("missing_line", key);
@@ -615,7 +759,7 @@ export function gradeMove(live: LivePuzzle, move: PuzzleMove, skin: Skin): Verdi
       }
       if (move.check === "final_answer" && stage === "final_answer") {
         // Taking the a away instead of dividing by it: 3x = 15 gives x = 12.
-        const key = finalAnswer(move.text, n.answer, { value: n.c - n.b - n.a, key: "subtracted_a" });
+        const key = finalAnswer(move.text, n.answer, [{ value: n.c - n.b - n.a, key: "subtracted_a" }]);
         if (key === "correct") return pass("final_answer", finishes("final_answer"));
         return key === "unreadable" ? unreadable("final_answer") : miss("final_answer", key);
       }
@@ -638,20 +782,21 @@ function firstMove(text: string, n: MissingInstance): string {
 
 /**
  * A final answer, per the items' equivalent_to x = {answer} check: "x = 12", "12 = x" and
- * "1x = 12" are x on its own, and a bare number counts too. Another true line isn't finished
- * yet ("not_alone"), and a known wrong value names its slip.
+ * "1x = 12" are x alone, and a bare number counts too. Another true line isn't finished yet
+ * ("not_alone"), and a known wrong value names its slip's ask.
  */
-function finalAnswer(text: string, answer: number, slip: { value: number; key: string }): string {
+function finalAnswer(text: string, answer: number, slips: { value: number; key: string }[]): string {
+  const slipKey = (is: (value: number) => boolean) => slips.find((s) => is(s.value))?.key ?? "final_other";
   if (readable(text)) {
     if (sameLine(text, `x = ${answer}`)) return "correct";
     if (hasSolution(text, answer)) return "not_alone";
-    return hasSolution(text, slip.value) ? slip.key : "final_other";
+    return slipKey((v) => hasSolution(text, v));
   }
   const value = bareNumber(text);
   if (value === null) return "unreadable";
   const is = (k: number) => Math.abs(value - k) < 1e-9;
   if (is(answer)) return "correct";
-  return is(slip.value) ? slip.key : "final_other";
+  return slipKey(is);
 }
 
 /** The next hint, or null when they're used up. */
