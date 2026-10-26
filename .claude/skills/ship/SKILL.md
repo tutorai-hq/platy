@@ -50,8 +50,9 @@ architecture changed: y/n, declared: y/n        [+ architect-reviewer verdict]
 scope: KEEP k / CUT c / SHRINK s   (CUTs acted on: …)
 drift: <A-ids or none>   privacy: <P-ids or none / not triggered>   codex: <n accepted / n dismissed / not triggered>
 fixed: …   dismissed: … (one line each)
-UI changed → consider /demo-check        (only if web/ changed)
+teen-test: <persona/device outcome, …> | top: <S-level + problem> | report: <path>   (only if web/ changed)
 ```
+**`web/` changed →** before writing the block, run `/teen-test --quick <the feature, in a few words>` (Skill `teen-test`) and fill the `teen-test:` line from its summary. It reports and never blocks the commit; S1 findings get named in `fixed:` or `dismissed:` like any other finding.
 
 ## 4. Commit message
 Run the `change-summarizer` agent (default mode, short message). Show the message.
