@@ -61,7 +61,7 @@ export function App() {
 
       {age === "ask" && (
         <Screen title="When were you born?" mascot="calm">
-          <p>Platy only keeps whether it's for you, not your birthday.</p>
+          <p>Platy uses this to check your age, and doesn't save your birthday.</p>
           <AgeCheck onAnswer={(ok) => setAge(ok ? "ok" : "under")} />
         </Screen>
       )}
