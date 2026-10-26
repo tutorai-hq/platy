@@ -387,8 +387,8 @@ describe("MockTransport", () => {
   });
 
   describe("plain, true lines (R-06, teen test 2026-10-26)", () => {
-    const toP3 = async (timing = FAST) => {
-      const h = harness(LESSON, undefined, timing);
+    const toP3 = async () => {
+      const h = harness(LESSON);
       await h.settle();
       await h.send({ type: "answer", problem_id: "p1", text: "5" });
       await h.send({ type: "answer", problem_id: "p2", text: "8" });
@@ -437,7 +437,12 @@ describe("MockTransport", () => {
     });
 
     it("finishes the closing line, then waits for See my map before the session ends", async () => {
-      const h = await toP3({ ...FAST, closeMs: 60_000 });
+      const h = harness(LESSON, undefined, { ...FAST, wait: true });
+      await h.settle();
+      for (const [id, text] of [["p1", "5"], ["p2", "8"]] as const) {
+        await h.send({ type: "answer", problem_id: id, text });
+        await h.cont(); // Next problem waits for the tap too
+      }
       await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
       expect(h.said().at(-1)).toMatch(/^That's all of them\./);
       expect(h.events.filter((e) => e.type === "tutor_message").at(-1)).toMatchObject({ done: true });
@@ -445,15 +450,6 @@ describe("MockTransport", () => {
       expect(h.events.some((e) => e.type === "session_end")).toBe(false);
       await h.cont();
       expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3, first_try: 3 });
-    });
-
-    it("shows the map by itself after the closing moment", async () => {
-      const h = await toP3({ ...FAST, closeMs: 5 });
-      await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
-      expect(h.events.some((e) => e.type === "session_end")).toBe(false);
-      await new Promise((r) => setTimeout(r, 40));
-      await h.settle();
-      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3 });
     });
   });
 
@@ -676,17 +672,18 @@ describe("MockTransport", () => {
   });
 
   // Teen test 2026-10-26: two "fresh page" cards and 3 to 6 seconds with nothing to tap between
-  // problems. Now the solved card stays with a "Next problem" button that also moves on by itself.
+  // problems. Now the solved card stays with a "Next problem" button. The re-run found that a
+  // timer on that button took it away mid-read, so nothing moves on by itself any more.
   describe("the moment between problems (R-17, teen test 2026-10-26)", () => {
-    const timed = (nextMs: number) => {
+    const waiting = () => {
       const events: ServerEvent[] = [];
-      const t = new MockTransport({ ...FAST, nextMs }, undefined, LESSON);
+      const t = new MockTransport({ ...FAST, wait: true }, undefined, LESSON);
       void t.start("tutoring", (e) => events.push(e));
       return { t, events };
     };
 
     it("keeps the solved problem on screen with a Next button, and moves on when it's tapped", async () => {
-      const { t, events } = timed(60_000);
+      const { t, events } = waiting();
       await t.whenIdle();
       t.send({ type: "answer", problem_id: "p1", text: "x = 5" });
       await t.whenIdle();
@@ -699,18 +696,18 @@ describe("MockTransport", () => {
       expect(events.slice(reset).find((e) => e.type === "problem")).toMatchObject({ problem_id: "p2" });
     });
 
-    it("moves on by itself after a moment", async () => {
-      const { t, events } = timed(5);
+    it("never moves on by itself (teen test re-run 2026-10-26)", async () => {
+      const { t, events } = waiting();
       await t.whenIdle();
       t.send({ type: "answer", problem_id: "p1", text: "x = 5" });
       await t.whenIdle();
       await new Promise((r) => setTimeout(r, 30));
       await t.whenIdle();
-      expect(events.filter((e) => e.type === "problem").map((e) => (e.type === "problem" ? e.problem_id : ""))).toEqual(["p1", "p2"]);
-      // A late tap after it moved on does nothing.
+      expect(events.filter((e) => e.type === "problem").map((e) => (e.type === "problem" ? e.problem_id : ""))).toEqual(["p1"]);
+      expect(events.some((e) => e.type === "reset")).toBe(false);
       t.send({ type: "continue" });
       await t.whenIdle();
-      expect(events.filter((e) => e.type === "reset")).toHaveLength(1);
+      expect(events.filter((e) => e.type === "problem")).toHaveLength(2);
     });
 
     it("shows the next problem before its intro streams, so the card never waits empty", async () => {

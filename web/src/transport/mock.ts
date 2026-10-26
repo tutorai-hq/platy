@@ -26,19 +26,18 @@ export interface MockTiming {
   /** How long the new-page moment lasts before what comes next. */
   resetMs: number;
   /**
-   * After a solved problem, how long its "Next problem" button waits before moving on by itself
-   * (R-17). Unset or 0 moves on at once, with no button.
+   * A solved problem waits for the "Next problem" tap, and the closing line for "See my map"
+   * (R-17). Nothing moves on by itself (teen test 2026-10-26: a timer took the button away
+   * mid-read). Unset moves on at once, with no button, for tests.
    */
-  nextMs?: number;
-  /** After the closing line, how long the map waits for "See my map" before coming by itself. */
-  closeMs?: number;
+  wait?: boolean;
 }
 
 // What a chat message is about, for the mock's routing only. The real tutor reads the message.
 const WANTS_ANSWER = /\b(gimme|give me|tell me|what'?s|whats)\b.*\banswer\b|\banswer\b.*\b(pls|plz|please|now)\b|just tell me/i;
 const MATHY = /\d|[=+\-*/^×÷]|\b(add|subtract|minus|plus|times|divide|multiply|sides?|undo|move|equation|solve|step|number|answer|x|first|then|get)\b/i;
 
-export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 700, nextMs: 1500, closeMs: 4000 };
+export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 700, wait: true };
 
 // Plays the role of Platy's server, in the browser, from a fixed script. Nothing the child
 // types is stored: it is read once to pick the scripted reply and then dropped (P-1). The one
@@ -103,8 +102,6 @@ export class MockTransport implements TutorTransport {
    * the screen changes (R-01). Answers and lines wait too; the chat stays open.
    */
   private next: (() => Promise<void>) | null = null;
-  /** Counts offers, so a timer from an older one never takes a newer one. */
-  private offers = 0;
 
   constructor(
     private readonly timing: MockTiming = DEMO_TIMING,
@@ -414,13 +411,13 @@ export class MockTransport implements TutorTransport {
       return;
     }
     // Hard reset at the end of a problem (R-17); the next problem starts on a clean page. The
-    // solved card stays with a "Next problem" button for a moment, or until it's tapped.
+    // solved card stays, with its check line, until "Next problem" is tapped.
     const go = async () => {
       this.out({ type: "reset", reason: "problem_end" });
       await this.sleep(this.timing.resetMs);
       await this.present(next);
     };
-    if (this.timing.nextMs) this.offer(NEXT_PROBLEM, go, this.timing.nextMs);
+    if (this.timing.wait) this.offer(NEXT_PROBLEM, go);
     else await go();
   }
 
@@ -619,11 +616,11 @@ export class MockTransport implements TutorTransport {
 
   /**
    * The closing line finishes before the map takes the screen (teen test 2026-10-26: it was cut
-   * off mid-sentence). The student taps See my map, or it comes by itself after `closeMs`.
+   * off mid-sentence), and the map waits for the See my map tap.
    */
   private async closeSession(): Promise<void> {
     await this.say(CLOSING);
-    if (this.timing.closeMs) this.offer(SEE_MAP, async () => this.end(), this.timing.closeMs);
+    if (this.timing.wait) this.offer(SEE_MAP, async () => this.end());
     else this.end();
   }
 
@@ -637,17 +634,10 @@ export class MockTransport implements TutorTransport {
     this.out({ type: "primer_state", ...this.primer.after(move, reason, skill_id) });
   }
 
-  /**
-   * Wait for the student's tap before `go` (R-01): the button's label says where it leads. With
-   * `autoMs`, it also moves on by itself after that long (R-17).
-   */
-  private offer(label: string, go: () => Promise<void>, autoMs = 0): void {
-    const offer = ++this.offers;
+  /** Wait for the student's tap before `go` (R-01, R-17): the button's label says where it leads. */
+  private offer(label: string, go: () => Promise<void>): void {
     this.next = go;
     this.out({ type: "next_up", label });
-    if (autoMs > 0) {
-      setTimeout(() => this.run(() => (this.offers === offer ? this.take() : Promise.resolve())), autoMs);
-    }
   }
 
   private async take(): Promise<void> {

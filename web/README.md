@@ -203,12 +203,14 @@ sends `next_up`. The browser keeps the screen as it is, including a marked line 
 verdict, and shows one button with that label in place of the answer box's buttons. The server
 ignores answers and lines until `continue`; the chat stays open. Teen testers read the old
 straight swap as "I failed and it's hiding it".
-After a solved problem the server sends `next_up` ("Next problem") too, and moves on by itself
-after a moment (1.5 s in the mock) if it isn't tapped (R-17). The new-page note shows once, on the
-problem card, and the next problem arrives before its intro streams. After the last one, the closing line finishes and `next_up` ("See my map") waits: the map
-comes on the tap, or by itself after a moment. `session_end` carries `first_try` (problems solved
-with no miss), and the map's closing line is picked from it and `solved` (`content/map.json`), so
-it says what happened rather than "you stuck with the tricky parts" to a 4-of-5 student.
+After a solved problem the server sends `next_up` ("Next problem") too, and waits for the tap
+(R-17): nothing moves on by itself, because a timer on that button took it away while slower
+readers were still on the check line (teen test re-run 2026-10-26). The new-page note shows once,
+on the problem card, and the next problem arrives before its intro streams. After the last one,
+the closing line finishes and `next_up` ("See my map") waits for its tap too. `session_end`
+carries `first_try` (problems solved with no miss), and the map's closing
+line is picked from it and `solved` (`content/map.json`), so it says what happened rather than
+"you stuck with the tricky parts" to a 4-of-5 student.
 
 "Your map" (R-13, proposed) adds `map: [{skill_id, before, after, due}]` to `session_end`: each
 skill's mastery when the session started and when it ended, and whether the primer wants it
