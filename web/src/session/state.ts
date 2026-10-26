@@ -124,9 +124,10 @@ export type Action =
   | { type: "close_overlay" }
   | { type: "restart" };
 
+// Plain words: teen testers (2026-10-26) asked what "fresh page" meant.
 const RESET_NOTES = {
-  problem_end: "Nice work. Fresh page for the next one.",
-  topic_switch: "Let's switch it up.",
+  problem_end: "Next one coming up.",
+  topic_switch: "Something new coming up.",
 };
 
 export function reducer(state: SessionState, action: Action): SessionState {

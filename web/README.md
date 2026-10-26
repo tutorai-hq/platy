@@ -188,6 +188,9 @@ sends `next_up`. The browser keeps the screen as it is, including a marked line 
 verdict, and shows one button with that label in place of the answer box's buttons. The server
 ignores answers and lines until `continue`; the chat stays open. Teen testers read the old
 straight swap as "I failed and it's hiding it".
+After a solved problem the server sends `next_up` ("Next problem") too, and moves on by itself
+after a moment (1.5 s in the mock) if it isn't tapped (R-17). The new-page note shows once, on the
+problem card, and the next problem arrives before its intro streams.
 
 "Your map" (R-13, proposed) adds `map: [{skill_id, before, after, due}]` to `session_end`: each
 skill's mastery when the session started and when it ended, and whether the primer wants it

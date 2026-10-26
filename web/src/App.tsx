@@ -104,6 +104,7 @@ export function App() {
                   feedback={s.state.feedback}
                   onAnswer={s.answer}
                   onHint={s.hint}
+                  note={s.state.resetNote}
                   nextUp={s.state.nextUp}
                   onNext={s.next}
                 />

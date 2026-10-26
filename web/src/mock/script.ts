@@ -246,6 +246,8 @@ export const DETOUR_PROBE_DEEPER = "Next quick check";
 export const DETOUR_TEACH = "Show me how";
 export const DETOUR_BACK = "Back to my problem";
 export const DETOUR_PUZZLE = "Quick puzzle";
+/** The button on a solved problem; it also moves on by itself after a moment (R-17). */
+export const NEXT_PROBLEM = "Next problem";
 export const PROBE_THANKS = "Thanks, that tells me a lot.";
 export const PREREQS_SOLID = "Those basics are solid, so it's just this one move. Back to the problem.";
 

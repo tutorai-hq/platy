@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { childMathToLatex } from "../math/latex";
 import { Tex } from "../math/MathText";
 import type { Problem } from "../protocol";
 import type { AnswerFeedback } from "../session/state";
@@ -31,12 +32,14 @@ interface Props {
   feedback: AnswerFeedback;
   onAnswer: (problemId: string, text: string) => void;
   onHint: (problemId: string) => void;
+  /** The new-page note (R-17), shown while there's no problem on the card. */
+  note?: string | null;
   /** The label of the button to what's next, while the server waits for the student. */
   nextUp: string | null;
   onNext: () => void;
 }
 
-export function ProblemCard({ problem, feedback, onAnswer, onHint, nextUp, onNext }: Props) {
+export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp, onNext }: Props) {
   const [draft, setDraft] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
   const problemId = problem?.problem_id;
@@ -52,9 +55,10 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, nextUp, onNex
 
   if (!problem) {
     return (
+      // One place for the new-page moment, with one mascot (R-17).
       <section className="card problem problem--waiting" aria-label="Problem">
-        <Mascot size={72} />
-        <p>Your next problem is on its way.</p>
+        <Mascot size={72} mood={note ? "happy" : "calm"} />
+        <p role="status">{note ?? "Your next problem is on its way."}</p>
       </section>
     );
   }
@@ -93,6 +97,13 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, nextUp, onNex
       {/* The verdict sits above the way on, so it's read first and stays until the student moves. */}
       <p className={`problem__feedback${fb ? ` problem__feedback--${fb.tone}` : ""}`} role="status">
         {fb?.text ?? ""}
+        {/* A right answer is confirmed in the student's own words before anything moves on (R-17). */}
+        {solved && fb && draft.trim() && (
+          <>
+            {" "}
+            <Tex latex={childMathToLatex(draft.trim())} /> <span aria-hidden="true">✓</span>
+          </>
+        )}
       </p>
 
       {nextUp !== null ? (

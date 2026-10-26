@@ -549,6 +549,54 @@ describe("MockTransport", () => {
     });
   });
 
+  // Teen test 2026-10-26: two "fresh page" cards and 3 to 6 seconds with nothing to tap between
+  // problems. Now the solved card stays with a "Next problem" button that also moves on by itself.
+  describe("the moment between problems (R-17, teen test 2026-10-26)", () => {
+    const timed = (nextMs: number) => {
+      const events: ServerEvent[] = [];
+      const t = new MockTransport({ ...FAST, nextMs }, undefined, LESSON);
+      void t.start("tutoring", (e) => events.push(e));
+      return { t, events };
+    };
+
+    it("keeps the solved problem on screen with a Next button, and moves on when it's tapped", async () => {
+      const { t, events } = timed(60_000);
+      await t.whenIdle();
+      t.send({ type: "answer", problem_id: "p1", text: "x = 5" });
+      await t.whenIdle();
+      expect(events.at(-1)).toEqual({ type: "next_up", label: "Next problem" });
+      expect(events.some((e) => e.type === "reset")).toBe(false);
+      t.send({ type: "continue" });
+      await t.whenIdle();
+      const reset = events.findIndex((e) => e.type === "reset");
+      expect(events[reset]).toEqual({ type: "reset", reason: "problem_end" });
+      expect(events.slice(reset).find((e) => e.type === "problem")).toMatchObject({ problem_id: "p2" });
+    });
+
+    it("moves on by itself after a moment", async () => {
+      const { t, events } = timed(5);
+      await t.whenIdle();
+      t.send({ type: "answer", problem_id: "p1", text: "x = 5" });
+      await t.whenIdle();
+      await new Promise((r) => setTimeout(r, 30));
+      await t.whenIdle();
+      expect(events.filter((e) => e.type === "problem").map((e) => (e.type === "problem" ? e.problem_id : ""))).toEqual(["p1", "p2"]);
+      // A late tap after it moved on does nothing.
+      t.send({ type: "continue" });
+      await t.whenIdle();
+      expect(events.filter((e) => e.type === "reset")).toHaveLength(1);
+    });
+
+    it("shows the next problem before its intro streams, so the card never waits empty", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      const problem = h.events.findIndex((e) => e.type === "problem");
+      const intro = h.events.findIndex((e) => e.type === "tutor_message" && e.delta.startsWith("Let's"));
+      expect(problem).toBeGreaterThan(-1);
+      expect(problem).toBeLessThan(intro);
+    });
+  });
+
   // Teen test 2026-10-26: a probe swapped in with no reason and no verdict read as "I failed and
   // it's hiding it". Each detour now says why and waits for the student's tap (R-01).
   describe("probe flow (R-01, teen test 2026-10-26)", () => {

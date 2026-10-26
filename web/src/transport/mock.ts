@@ -10,7 +10,7 @@ import {
   toWire,
 } from "../mock/puzzles";
 import {
-  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
+  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
   OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
   PUZZLE_UNREADABLE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SHOW_ONE, STEP_IN_LINES,
   STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
@@ -23,11 +23,16 @@ export interface MockTiming {
   thinkMs: number;
   /** Pause between streamed words. */
   wordMs: number;
-  /** How long the "nice, fresh page" moment lasts before the next problem. */
+  /** How long the new-page moment lasts before what comes next. */
   resetMs: number;
+  /**
+   * After a solved problem, how long its "Next problem" button waits before moving on by itself
+   * (R-17). Unset or 0 moves on at once, with no button.
+   */
+  nextMs?: number;
 }
 
-export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 1600 };
+export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 700, nextMs: 1500 };
 
 // Plays the role of Platy's server, in the browser, from a fixed script. Nothing the child
 // types is stored: it is read once to pick the scripted reply and then dropped (P-1). The one
@@ -84,6 +89,8 @@ export class MockTransport implements TutorTransport {
    * the screen changes (R-01). Answers and lines wait too; the chat stays open.
    */
   private next: (() => Promise<void>) | null = null;
+  /** Counts offers, so a timer from an older one never takes a newer one. */
+  private offers = 0;
 
   constructor(
     private readonly timing: MockTiming = DEMO_TIMING,
@@ -388,11 +395,15 @@ export class MockTransport implements TutorTransport {
       this.closed = true;
       return;
     }
-    await this.sleep(this.timing.resetMs);
-    // Hard reset at the end of a problem (R-17); the next problem starts on a clean page.
-    this.out({ type: "reset", reason: "problem_end" });
-    await this.sleep(this.timing.resetMs);
-    await this.present(next);
+    // Hard reset at the end of a problem (R-17); the next problem starts on a clean page. The
+    // solved card stays with a "Next problem" button for a moment, or until it's tapped.
+    const go = async () => {
+      this.out({ type: "reset", reason: "problem_end" });
+      await this.sleep(this.timing.resetMs);
+      await this.present(next);
+    };
+    if (this.timing.nextMs) this.offer(NEXT_PROBLEM, go, this.timing.nextMs);
+    else await go();
   }
 
   private async present(p: ScriptedProblem, intro = p.intro): Promise<void> {
@@ -403,7 +414,6 @@ export class MockTransport implements TutorTransport {
     this.awaitingWhy = false;
     const lessonOnly = this.order.filter((q) => q !== CONFIDENCE_BUILDER);
     const position = lessonOnly.indexOf(p) + 1;
-    for (const text of intro) await this.say(text);
     const kind = this.probe?.problem === p ? "probe" : p === CONFIDENCE_BUILDER ? "warmup" : "practice";
     this.out({
       type: "problem",
@@ -416,6 +426,8 @@ export class MockTransport implements TutorTransport {
       position, // 0 for the confidence builder, which isn't one of the lesson's problems
       total: lessonOnly.length,
     });
+    // The problem shows first, so there's no wait on an empty card while the intro streams.
+    for (const text of intro) await this.say(text);
   }
 
   private skin() {
@@ -573,10 +585,17 @@ export class MockTransport implements TutorTransport {
     this.out({ type: "primer_state", ...this.primer.after(move, reason, skill_id) });
   }
 
-  /** Wait for the student's tap before `go` (R-01): the button's label says where it leads. */
-  private offer(label: string, go: () => Promise<void>): void {
+  /**
+   * Wait for the student's tap before `go` (R-01): the button's label says where it leads. With
+   * `autoMs`, it also moves on by itself after that long (R-17).
+   */
+  private offer(label: string, go: () => Promise<void>, autoMs = 0): void {
+    const offer = ++this.offers;
     this.next = go;
     this.out({ type: "next_up", label });
+    if (autoMs > 0) {
+      setTimeout(() => this.run(() => (this.offers === offer ? this.take() : Promise.resolve())), autoMs);
+    }
   }
 
   private async take(): Promise<void> {

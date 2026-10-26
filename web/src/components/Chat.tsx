@@ -1,10 +1,10 @@
 import { type Ref, useEffect, useRef, useState } from "react";
 import { MathText } from "../math/MathText";
 import { type ChatMessage, platyIsTyping } from "../session/state";
-import { Mascot } from "./Mascot";
 
 interface Props {
   messages: ChatMessage[];
+  /** A new page is showing (R-17); its note is on the problem card, and the chat waits quietly. */
   resetNote: string | null;
   /** An overlay is up. */
   disabled: boolean;
@@ -36,12 +36,6 @@ export function Chat({ messages, resetNote, disabled, hold, inputRef, onSay }: P
   return (
     <section className="card chat" aria-label="Chat with Platy">
       <div className="chat__log" role="log" aria-live="polite">
-        {resetNote && (
-          <div className="reset-note" role="status">
-            <Mascot size={64} mood="happy" />
-            <p>{resetNote}</p>
-          </div>
-        )}
         {messages.map((m, i) => (
           <div
             key={m.id}

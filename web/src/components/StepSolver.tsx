@@ -93,14 +93,15 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: P
       </div>
 
       {/* A marked line stays on screen, with its words, until the student taps on (R-01). */}
-      {nextUp !== null ? (
-        <NextUp label={nextUp} onNext={onNext} />
-      ) : solved ? (
+      {solved && (
         <div className="stepsolver__done">
           <Mascot size={56} mood="happy" />
           <p>Every line checks out.</p>
         </div>
-      ) : (
+      )}
+      {nextUp !== null ? (
+        <NextUp label={nextUp} onNext={onNext} />
+      ) : solved ? null : (
         <LineEntry
           key={next}
           id="step"
