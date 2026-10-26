@@ -235,8 +235,17 @@ export const SAFETY_RESOURCES: SafetyResource[] = [
 
 // Probing (R-01): before teaching a miss, the primer checks the prerequisite one level down,
 // then one more, with the skill map's own probes. A probe has no hints of its own.
-export const PROBE_LEAD = "Before we fix that line, one quick check on something underneath it. Just your best try.";
+export const PROBE_LEAD = "Before we fix that line, one quick check on something underneath it.";
 export const PROBE_DEEPER = "One more quick check, a level further down.";
+/** Said on the quick check itself, after the new page. */
+export const PROBE_ASK = "Just your best try.";
+
+// The buttons to a detour (`next_up`), so the student reads why before the screen changes (R-01).
+export const DETOUR_PROBE = "Quick check";
+export const DETOUR_PROBE_DEEPER = "Next quick check";
+export const DETOUR_TEACH = "Show me how";
+export const DETOUR_BACK = "Back to my problem";
+export const DETOUR_PUZZLE = "Quick puzzle";
 export const PROBE_THANKS = "Thanks, that tells me a lot.";
 export const PREREQS_SOLID = "Those basics are solid, so it's just this one move. Back to the problem.";
 

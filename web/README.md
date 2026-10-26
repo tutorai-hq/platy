@@ -180,6 +180,15 @@ text from the server and nothing the student wrote reaches the panel. In the moc
 `src/mock/primer.ts` stands in for the primer with a small BKT update; the real numbers come from
 Connor's policy and pyBKT mastery (A-5).
 
+Detours that wait for a tap (R-01, proposed after the 2026-10-26 teen test) add `kind:
+"practice" | "probe" | "warmup"` to `problem`, `next_up {label}` from the server and `continue` from
+the client. Before a detour (a quick check one or two levels down, a repair puzzle, the worked
+example that teaches a gap, or the way back to the problem), the server says why in the chat and
+sends `next_up`. The browser keeps the screen as it is, including a marked line and a quick check's
+verdict, and shows one button with that label in place of the answer box's buttons. The server
+ignores answers and lines until `continue`; the chat stays open. Teen testers read the old
+straight swap as "I failed and it's hiding it".
+
 "Your map" (R-13, proposed) adds `map: [{skill_id, before, after, due}]` to `session_end`: each
 skill's mastery when the session started and when it ended, and whether the primer wants it
 reviewed soon. Numbers and skill ids only. The browser works out each skill's state from that

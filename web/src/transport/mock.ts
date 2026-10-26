@@ -10,8 +10,8 @@ import {
   toWire,
 } from "../mock/puzzles";
 import {
-  BACK_TO_IT, CLOSING, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
-  OUT_OF_HINTS, PREREQS_SOLID, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
+  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
+  OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
   PUZZLE_UNREADABLE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SHOW_ONE, STEP_IN_LINES,
   STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
 } from "../mock/script";
@@ -79,6 +79,11 @@ export class MockTransport implements TutorTransport {
   private probe: { origin: ScriptedProblem; chain: string[]; problem: ScriptedProblem } | null = null;
   private probed = false;
   private gap: string | null = null;
+  /**
+   * A detour that waits for the student's tap (`next_up`, then `continue`), so they read why before
+   * the screen changes (R-01). Answers and lines wait too; the chat stays open.
+   */
+  private next: (() => Promise<void>) | null = null;
 
   constructor(
     private readonly timing: MockTiming = DEMO_TIMING,
@@ -126,7 +131,8 @@ export class MockTransport implements TutorTransport {
           this.closed = true;
           return;
         case "skip":
-          if (this.probe) await this.leaveProbe();
+          if (this.next) await this.take();
+          else if (this.probe) await this.leaveProbe();
           else if (this.puzzle) await this.finishPuzzle();
           else if (this.current) await this.finishProblem();
           return;
@@ -161,14 +167,19 @@ export class MockTransport implements TutorTransport {
         this.paused = false;
         await this.pivot();
         return;
+      case "continue":
+        await this.take();
+        return;
       case "hint_requested":
-        if (p) await this.hint(p);
+        if (p && !this.next) await this.hint(p);
         return;
       case "answer":
+        if (this.next) return;
         // A step-by-step problem is solved in lines; the answer alone never counts (R-39).
         if (p && event.problem_id === p.problem_id && p.format !== "steps") await this.answer(p, event.text);
         return;
       case "step":
+        if (this.next) return;
         if (p?.format === "steps" && event.problem_id === p.problem_id) await this.step(p, event.line, event.text);
         return;
       case "child_message":
@@ -245,7 +256,9 @@ export class MockTransport implements TutorTransport {
     if (slip?.repair && !this.repaired) {
       // A slip with a repair puzzle: work on it there first, then come back (R-37).
       this.repaired = true;
-      await this.startPuzzle(slip.repair, REPAIR_LEAD);
+      const template = slip.repair;
+      await this.say(REPAIR_LEAD);
+      this.offer(DETOUR_PUZZLE, () => this.startPuzzle(template, null));
     } else if (this.misses >= 3 && !this.pivoted) {
       // Third miss on one problem: first rung of the de-escalation ladder (R-21).
       await this.suggestPause();
@@ -302,13 +315,15 @@ export class MockTransport implements TutorTransport {
         if (below && !this.probed) {
           // The first miss: find out what's underneath before teaching anything (R-01).
           this.probed = true;
-          await this.startProbe(p, [below]);
+          await this.say(PROBE_LEAD);
+          this.offer(DETOUR_PROBE, () => this.startProbe(p, [below]));
         } else if (item && !this.repaired) {
           // A slip with a repair puzzle: work on that move there first, then a fresh problem (R-37).
           this.repaired = true;
           this.confirm = true;
           this.think("repair", "slip_repair", node);
-          await this.startPuzzle(item.template, STEP_REPAIR_LEAD, item.item_id);
+          await this.say(STEP_REPAIR_LEAD);
+          this.offer(DETOUR_PUZZLE, () => this.startPuzzle(item.template, null, item.item_id));
         } else if (this.misses >= 3 && !this.pivoted) {
           await this.suggestPause(); // R-21, as for a problem's answers
         } else if (this.misses === 1) {
@@ -332,6 +347,7 @@ export class MockTransport implements TutorTransport {
 
   private async pivot(): Promise<void> {
     this.pivoted = true;
+    this.next = null;
     // The reset below clears any puzzle on screen, so drop it here too. The lesson picks up
     // where it was after the warm-up.
     // A pause during a repair still never goes back to the problem they slipped on: the repair
@@ -359,6 +375,7 @@ export class MockTransport implements TutorTransport {
   }
 
   private async finishProblem(): Promise<void> {
+    this.next = null;
     this.index++;
     this.current = null;
     this.probe = null;
@@ -387,6 +404,7 @@ export class MockTransport implements TutorTransport {
     const lessonOnly = this.order.filter((q) => q !== CONFIDENCE_BUILDER);
     const position = lessonOnly.indexOf(p) + 1;
     for (const text of intro) await this.say(text);
+    const kind = this.probe?.problem === p ? "probe" : p === CONFIDENCE_BUILDER ? "warmup" : "practice";
     this.out({
       type: "problem",
       problem_id: p.problem_id,
@@ -394,6 +412,7 @@ export class MockTransport implements TutorTransport {
       prompt: p.prompt,
       instruction: p.instruction,
       format: p.format ?? "answer",
+      kind,
       position, // 0 for the confidence builder, which isn't one of the lesson's problems
       total: lessonOnly.length,
     });
@@ -403,15 +422,18 @@ export class MockTransport implements TutorTransport {
     return skinFor(this.interest, this.colors);
   }
 
-  /** `item` picks a specific item, such as a slip's repair; otherwise the template's own. */
-  private async startPuzzle(template: PuzzleTemplate, lead: string, item?: string): Promise<void> {
+  /**
+   * `item` picks a specific item, such as a slip's repair; otherwise the template's own. `lead` is
+   * said first, unless it was said already, before the student tapped on to the puzzle.
+   */
+  private async startPuzzle(template: PuzzleTemplate, lead: string | null, item?: string): Promise<void> {
     if (!this.puzzle) this.returnTo = this.current;
     this.current = null;
     this.stepLines = []; // the reset below clears them from the screen too
     this.awaitingWhy = false;
     this.puzzleNudge = null;
     this.reflecting = false;
-    await this.say(lead);
+    if (lead) await this.say(lead);
     this.out({ type: "topic_switch", label: template === "worked_example" ? "Worked example" : "Quick puzzle" });
     this.out({ type: "reset", reason: "topic_switch" });
     await this.sleep(this.timing.resetMs);
@@ -551,6 +573,18 @@ export class MockTransport implements TutorTransport {
     this.out({ type: "primer_state", ...this.primer.after(move, reason, skill_id) });
   }
 
+  /** Wait for the student's tap before `go` (R-01): the button's label says where it leads. */
+  private offer(label: string, go: () => Promise<void>): void {
+    this.next = go;
+    this.out({ type: "next_up", label });
+  }
+
+  private async take(): Promise<void> {
+    const go = this.next;
+    this.next = null;
+    if (go) await go();
+  }
+
   /** Probe the last skill in `chain`, one level further down the path than the one before it (R-01). */
   private async startProbe(origin: ScriptedProblem, chain: string[]): Promise<void> {
     const node = chain.at(-1)!;
@@ -558,9 +592,8 @@ export class MockTransport implements TutorTransport {
     this.probe = { origin, chain, problem };
     this.primer.hypothesize("suspects_gap", node);
     this.think("probe", chain.length === 1 ? "probe_prerequisite" : "probe_deeper", node);
-    await this.say(chain.length === 1 ? PROBE_LEAD : PROBE_DEEPER);
     await this.newPage("topic_switch", "Quick check");
-    await this.present(problem, []);
+    await this.present(problem, [PROBE_ASK]);
   }
 
   private async probeAnswer(probe: NonNullable<MockTransport["probe"]>, text: string): Promise<void> {
@@ -575,24 +608,35 @@ export class MockTransport implements TutorTransport {
     const right = result === "correct";
     this.primer.observe(node, right);
     await this.say(PROBE_THANKS);
+    // The verdict stays on the card until the student taps on to what it led to (R-01).
     if (!right) {
       const below = PROBE_BELOW[node];
       // Probing goes at most two levels down; the deepest miss is the gap.
-      if (below && chain.length < 2) await this.startProbe(origin, [...chain, below]);
-      else await this.teachGap(origin, node);
+      if (below && chain.length < 2) {
+        await this.say(PROBE_DEEPER);
+        this.offer(DETOUR_PROBE_DEEPER, () => this.startProbe(origin, [...chain, below]));
+      } else {
+        await this.say(SHOW_ONE);
+        this.offer(DETOUR_TEACH, () => this.teachGap(origin, node));
+      }
       return;
     }
     this.think("probe", "probe_passed", node);
     if (chain.length > 1) {
       // This level is solid, so the gap is the one above it.
-      await this.teachGap(origin, chain.at(-2)!);
+      const gap = chain.at(-2)!;
+      await this.say(SHOW_ONE);
+      this.offer(DETOUR_TEACH, () => this.teachGap(origin, gap));
       return;
     }
-    this.probe = null;
     this.primer.hypothesize("gap_in_skill", origin.skill_id);
     this.think("pose_problem", "prereqs_solid", origin.skill_id);
-    await this.newPage("problem_end");
-    await this.present(origin, [PREREQS_SOLID]);
+    await this.say(PREREQS_SOLID);
+    this.offer(DETOUR_BACK, async () => {
+      this.probe = null;
+      await this.newPage("problem_end");
+      await this.present(origin, [BACK_TO_IT]);
+    });
   }
 
   /** Skipping a probe goes back to the problem it came from, not past it. */
@@ -612,7 +656,7 @@ export class MockTransport implements TutorTransport {
     this.primer.hypothesize("gap_found", gap);
     this.think("teach", "gap_found", gap);
     this.current = origin; // the worked example returns here
-    await this.startPuzzle("worked_example", SHOW_ONE);
+    await this.startPuzzle("worked_example", null);
   }
 
   /** A hard reset between two things on screen (R-17, A-4). */

@@ -111,6 +111,10 @@ export function useTutorSession(makeTransport: () => TutorTransport = createTran
       dispatch({ type: "child_said", id: `k${++childMessages.current}`, text: "Can I get a hint?" });
       send({ type: "puzzle_hint", instance_id });
     },
+    next: () => {
+      dispatch({ type: "continue_sent" });
+      send({ type: "continue" });
+    },
     puzzleNext: (instance_id: string) => {
       dispatch({ type: "puzzle_next_sent" });
       send({ type: "puzzle_next", instance_id });

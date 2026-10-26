@@ -1,6 +1,6 @@
 import { type Ref, useEffect, useRef, useState } from "react";
 import { MathText } from "../math/MathText";
-import type { ChatMessage } from "../session/state";
+import { type ChatMessage, platyIsTyping } from "../session/state";
 import { Mascot } from "./Mascot";
 
 interface Props {
@@ -20,8 +20,7 @@ interface Props {
 export function Chat({ messages, resetNote, disabled, hold, inputRef, onSay }: Props) {
   const [draft, setDraft] = useState("");
   const end = useRef<HTMLDivElement>(null);
-  const last = messages.at(-1);
-  const waiting = !resetNote && (last === undefined || last.from === "child");
+  const waiting = platyIsTyping(messages, resetNote);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });

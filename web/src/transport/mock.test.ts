@@ -29,7 +29,9 @@ function harness(lesson = LESSON, seed?: number) {
     return [...byId.values()];
   };
   const problems = () => events.filter((e) => e.type === "problem").map((e) => e.problem_id);
-  return { t, events, settle, send, said, problems };
+  // The student taps the button to a detour the tutor has ready (`next_up`, R-01).
+  const cont = () => send({ type: "continue" });
+  return { t, events, settle, send, said, problems, cont };
 }
 
 describe("MockTransport", () => {
@@ -127,6 +129,7 @@ describe("MockTransport", () => {
       await h.settle();
       await h.send({ type: "answer", problem_id: "p1", text: "25/3" });
       expect(h.said().join(" ")).toContain("I have a hunch");
+      await h.cont();
       expect(h.events).toContainEqual({ type: "topic_switch", label: "Quick puzzle" });
       const [puzzle] = puzzlesIn(h);
       if (puzzle?.template !== "spot_the_error") throw new Error("expected spot the error");
@@ -148,6 +151,7 @@ describe("MockTransport", () => {
       const h = harness();
       await h.settle();
       await h.send({ type: "answer", problem_id: "p1", text: "25/3" });
+      await h.cont();
       h.t.demo("skip");
       await h.settle();
       const mark = h.events.length;
@@ -384,7 +388,9 @@ describe("MockTransport", () => {
       const h = harness(STEP_LESSON, seed);
       await h.settle();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
       await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "5" });
+      await h.cont();
       expect(h.problems()).toEqual(["s1", "one_step_equations.1", "s1"]);
       return Object.assign(h, { from: h.events.length });
     };
@@ -452,6 +458,7 @@ describe("MockTransport", () => {
     it("sends a slip on 2x + 5 = 17 to its repair puzzle, then confirms the fix on a fresh problem (R-37, R-41)", async () => {
       const h = await probed();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      await h.cont();
       expect(h.events.filter((e) => e.type === "step_result").at(-1)).toMatchObject({ slip: "constant_moved_without_undoing" });
       expect(h.events).toContainEqual({ type: "topic_switch", label: "Quick puzzle" });
       const puzzle = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
@@ -484,6 +491,7 @@ describe("MockTransport", () => {
       for (const seed of [4208, 4144, 5786, 11628, ...Array.from({ length: 20 }, (_, i) => i + 1)]) {
         const h = await probed(seed);
         await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+        await h.cont();
         const puzzle = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
         if (puzzle?.template !== "spot_the_error") throw new Error("expected the spot-the-error repair");
         expect(isOneOf(puzzle.equation, lesson), `${seed}: ${puzzle.equation}`).toBe(false);
@@ -499,6 +507,7 @@ describe("MockTransport", () => {
     it("still brings a fresh problem, not the slipped one, after a pause during the repair (R-02, R-21)", async () => {
       const h = await probed();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      await h.cont();
       h.t.demo("pause");
       await h.settle();
       await h.send({ type: "resume" });
@@ -540,6 +549,89 @@ describe("MockTransport", () => {
     });
   });
 
+  // Teen test 2026-10-26: a probe swapped in with no reason and no verdict read as "I failed and
+  // it's hiding it". Each detour now says why and waits for the student's tap (R-01).
+  describe("probe flow (R-01, teen test 2026-10-26)", () => {
+    const after = (h: ReturnType<typeof harness>, mark: number) => h.events.slice(mark);
+
+    it("says why and waits for a tap before the first quick check", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      expect(h.said(mark).join(" ")).toContain("one quick check on something underneath");
+      expect(after(h, mark).at(-1)).toEqual({ type: "next_up", label: "Quick check" });
+      // Nothing changes on screen until the tap: the marked line and its words stay.
+      expect(after(h, mark).some((e) => e.type === "reset" || e.type === "problem")).toBe(false);
+      // Lines and answers wait; the chat still gets a reply.
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
+      expect(after(h, mark).filter((e) => e.type === "step_result")).toHaveLength(1);
+      const chat = h.events.length;
+      await h.send({ type: "child_message", text: "help" });
+      expect(h.said(chat)).toHaveLength(1);
+      expect(h.problems()).toEqual(["s1"]);
+
+      await h.cont();
+      const probe = h.events.filter((e) => e.type === "problem").at(-1);
+      expect(probe).toMatchObject({ problem_id: "one_step_equations.1", kind: "probe" });
+    });
+
+    it("shows each quick check's verdict and waits, then says where the tap leads", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
+      let mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      expect(after(h, mark)[0]).toEqual({ type: "answer_result", problem_id: "one_step_equations.1", result: "incorrect" });
+      expect(after(h, mark).at(-1)).toEqual({ type: "next_up", label: "Next quick check" });
+      expect(after(h, mark).some((e) => e.type === "reset")).toBe(false);
+      // A second answer while it waits isn't graded again.
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "5" });
+      expect(after(h, mark).filter((e) => e.type === "answer_result")).toHaveLength(1);
+
+      await h.cont();
+      mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      expect(after(h, mark).at(-1)).toEqual({ type: "next_up", label: "Show me how" });
+      await h.cont();
+      expect(h.events.some((e) => e.type === "puzzle" && e.puzzle.template === "worked_example")).toBe(true);
+    });
+
+    it("leads back to the problem with its own button when the basics are solid", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
+      const mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "5" });
+      expect(after(h, mark)[0]).toMatchObject({ type: "answer_result", result: "correct" });
+      expect(after(h, mark).at(-1)).toEqual({ type: "next_up", label: "Back to my problem" });
+      await h.cont();
+      expect(h.events.filter((e) => e.type === "problem").at(-1)).toMatchObject({ problem_id: "s1", kind: "practice" });
+    });
+
+    it("says why and waits before a repair puzzle too", async () => {
+      const h = harness();
+      await h.settle();
+      const mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "p1", text: "25/3" });
+      expect(after(h, mark).at(-1)).toEqual({ type: "next_up", label: "Quick puzzle" });
+      expect(after(h, mark).some((e) => e.type === "puzzle")).toBe(false);
+      await h.cont();
+      expect(h.events.some((e) => e.type === "puzzle")).toBe(true);
+    });
+
+    it("labels the warm-up after a pause as a warm-up", async () => {
+      const h = harness();
+      await h.settle();
+      h.t.demo("pause");
+      await h.settle();
+      await h.send({ type: "resume" });
+      expect(h.events.filter((e) => e.type === "problem").at(-1)).toMatchObject({ problem_id: "warmup", kind: "warmup" });
+    });
+  });
+
   // R-42 with R-01: the demo arc the primer view narrates, in codes and numbers only.
   describe("primer view (R-42)", () => {
     const primerStates = (h: ReturnType<typeof harness>, from = 0) =>
@@ -556,6 +648,7 @@ describe("MockTransport", () => {
       // Miss 2x + 5 = 17 with no known slip: probe one-step equations first (R-01).
       let mark = h.events.length;
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
       expect(moves(h, mark)).toEqual([
         "mark_line:line_invalid:two_step_equations",
         "probe:probe_prerequisite:one_step_equations",
@@ -567,6 +660,7 @@ describe("MockTransport", () => {
       mark = h.events.length;
       const before = primerStates(h).at(-1);
       await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.cont();
       expect(p(primerStates(h).at(-1), "one_step_equations")).toBeLessThan(p(before, "one_step_equations"));
       expect(moves(h, mark)).toEqual(["probe:probe_deeper:inverse_operations"]);
       expect(h.problems().at(-1)).toBe("inverse_operations.1");
@@ -574,6 +668,7 @@ describe("MockTransport", () => {
       // And there: that's the gap. Teach it with a worked example.
       mark = h.events.length;
       await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      await h.cont();
       expect(moves(h, mark)).toEqual(["teach:gap_found:inverse_operations"]);
       expect(primerStates(h).at(-1)?.hypothesis).toEqual({ code: "gap_found", skill_id: "inverse_operations" });
       expect(h.events.slice(mark).some((e) => e.type === "puzzle" && e.puzzle.template === "worked_example")).toBe(true);
@@ -589,6 +684,7 @@ describe("MockTransport", () => {
       // A slip on one line: the repair puzzle, then a fresh problem to confirm the fix.
       mark = h.events.length;
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      await h.cont();
       expect(moves(h, mark)).toEqual(["mark_line:slip_matched:two_step_equations", "repair:slip_repair:two_step_equations"]);
       h.t.demo("skip");
       await h.settle();
@@ -605,9 +701,12 @@ describe("MockTransport", () => {
       const h = harness(STEP_LESSON);
       await h.settle();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
       await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.cont();
       const mark = h.events.length;
       await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "4" });
+      await h.cont();
       expect(moves(h, mark)).toEqual(["probe:probe_passed:inverse_operations", "teach:gap_found:one_step_equations"]);
     });
 
@@ -616,6 +715,7 @@ describe("MockTransport", () => {
         const h = harness(STEP_LESSON);
         await h.settle();
         await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+        await h.cont();
         h.t.demo(leave);
         await h.settle();
         if (leave === "pause") {
@@ -631,6 +731,7 @@ describe("MockTransport", () => {
       const h = harness(STEP_LESSON);
       await h.settle();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
       await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
       await h.send({ type: "end_session" });
       const end = h.events.at(-1);
@@ -647,9 +748,12 @@ describe("MockTransport", () => {
       await h.settle();
       await h.send({ type: "child_message", text: "canary-7731 my name is Sam" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
       await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.cont();
       await h.send({ type: "child_message", text: "canary-7731 i hate this" });
       await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      await h.cont();
       const states = primerStates(h);
       expect(states.length).toBeGreaterThan(4);
       for (const s of states) {

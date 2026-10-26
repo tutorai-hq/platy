@@ -76,6 +76,11 @@ export interface SessionState {
   primer: PrimerView | null;
   /** The session's mastery report for "Your map" (R-13), once it ends. Dropped at the next start. */
   map: SkillReport[] | null;
+  /**
+   * The label of the button that moves on to what the server has ready next (`next_up`), such as
+   * a quick check before teaching (R-01). Null when nothing waits for the student.
+   */
+  nextUp: string | null;
 }
 
 export interface PrimerView {
@@ -102,6 +107,7 @@ export const initialState: SessionState = {
   solved: 0,
   primer: null,
   map: null,
+  nextUp: null,
 };
 
 export type Action =
@@ -112,6 +118,7 @@ export type Action =
   | { type: "step_sent"; text: string }
   | { type: "puzzle_move_sent"; move: PuzzleMove }
   | { type: "puzzle_next_sent" }
+  | { type: "continue_sent" }
   | { type: "reset_note_done" }
   | { type: "take_break"; until: number }
   | { type: "close_overlay" }
@@ -146,6 +153,9 @@ export function reducer(state: SessionState, action: Action): SessionState {
     }
     case "puzzle_next_sent":
       return { ...state, moving: true };
+    case "continue_sent":
+      // What's next is on its way; the chat waits for it, as between problems.
+      return state.nextUp === null ? state : { ...state, nextUp: null, moving: true };
     case "reset_note_done":
       return { ...state, resetNote: null };
     case "take_break":
@@ -176,12 +186,12 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
       const steps = problem.format === "steps"
         ? { problem_id: problem.problem_id, lines: [], pending: null, marked: null, solved: false }
         : null;
-      return { ...state, problem, feedback: null, steps, moving: false };
+      return { ...state, problem, feedback: null, steps, moving: false, nextUp: null };
     }
     case "puzzle": {
       // The same instance again is only a new look; a new one means the move is over.
       const fresh = state.puzzle?.puzzle.instance_id !== event.puzzle.instance_id;
-      return { ...state, puzzle: onPuzzle(state.puzzle, event.puzzle), moving: state.moving && !fresh };
+      return { ...state, puzzle: onPuzzle(state.puzzle, event.puzzle), moving: state.moving && !fresh, nextUp: fresh ? null : state.nextUp };
     }
     case "puzzle_result":
       if (state.puzzle?.puzzle.instance_id !== event.instance_id) return state;
@@ -209,9 +219,12 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
         puzzle: null,
         feedback: null,
         moving: true,
+        nextUp: null,
         // A topic_switch event just before the reset already named the new topic.
         resetNote: event.reason === "topic_switch" && state.resetNote ? state.resetNote : RESET_NOTES[event.reason],
       };
+    case "next_up":
+      return { ...state, nextUp: event.label };
     case "topic_switch":
       return { ...state, overlay: null, resetNote: event.label };
     case "pause_suggested":
@@ -270,4 +283,13 @@ function onVerdict(p: PuzzleState, check: CheckId, outcome: CheckOutcome): Puzzl
     : p.puzzle.template === "worked_example" ? workedStage(p.puzzle, outcomes)
     : balanceStage(outcomes);
   return { ...p, outcomes, pans, pending: null, last: { check, outcome }, done: stage === "done" };
+}
+
+/**
+ * Platy's typing dots show only while a reply to the student is due: after they said something,
+ * and not while a reset note fills the chat. An empty chat waits quietly, so the dots never run on
+ * a screen that has nothing more coming.
+ */
+export function platyIsTyping(messages: readonly ChatMessage[], resetNote: string | null): boolean {
+  return resetNote === null && messages.at(-1)?.from === "child";
 }

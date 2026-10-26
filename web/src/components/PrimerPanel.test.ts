@@ -40,7 +40,7 @@ describe("PrimerPanel (R-42)", () => {
     s = run(
       [
         { type: "tutor_message", message_id: "t1", delta: "canary-tutor reply", done: true },
-        { type: "problem", problem_id: "s1", skill_id: "two_step_equations", prompt: "2x + 5 = 17", instruction: "Solve", format: "steps", position: 1, total: 2 },
+        { type: "problem", problem_id: "s1", skill_id: "two_step_equations", prompt: "2x + 5 = 17", instruction: "Solve", format: "steps", kind: "practice", position: 1, total: 2 },
       ],
       s,
     );

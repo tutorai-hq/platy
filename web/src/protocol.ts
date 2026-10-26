@@ -24,6 +24,11 @@ export interface Problem {
    * is checked before the next opens (R-39). The final answer alone never counts.
    */
   format: "answer" | "steps";
+  /**
+   * "practice": one of the session's problems. "probe": a quick check one or two levels down the
+   * skill map before teaching (R-01). "warmup": the easier problem after a pause (R-21).
+   */
+  kind: "practice" | "probe" | "warmup";
   /** 1-based position in this session, for "Problem 2 of 3". */
   position: number;
   total: number;
@@ -76,6 +81,12 @@ export type ServerEvent =
   /** De-escalation ladder, first rung (R-21). */
   | { type: "pause_suggested" }
   | { type: "topic_switch"; label: string }
+  /**
+   * The next step is ready, and waits for the student: the browser shows one button with this
+   * label and sends `continue` when it's tapped. Used before a detour (a quick check, a puzzle), so
+   * the student reads why before the screen changes (R-01).
+   */
+  | { type: "next_up"; label: string }
   /** R-22. Detection is still an open design question; the UI slot exists. */
   | { type: "safety_escalation"; resources: SafetyResource[] }
   /** Fail closed (P-3): the session is over, show a calm error. */
@@ -101,6 +112,8 @@ export type ClientEvent =
   | { type: "hint_requested"; problem_id: string }
   /** The child chose "keep going" on the pause screen. */
   | { type: "resume" }
+  /** The student tapped the `next_up` button. */
+  | { type: "continue" }
   | { type: "end_session" }
   /** What the student did in a puzzle. The server grades it; the client never sends "correct". */
   | { type: "puzzle_move"; instance_id: string; move: PuzzleMove }

@@ -4,6 +4,7 @@ import type { Problem } from "../protocol";
 import type { AnswerFeedback } from "../session/state";
 import { MathInput } from "./MathInput";
 import { Mascot } from "./Mascot";
+import { NextUp } from "./NextUp";
 
 const FEEDBACK: Record<Exclude<AnswerFeedback, null>, { text: string; tone: string }> = {
   correct: { text: "That's right!", tone: "good" },
@@ -12,14 +13,30 @@ const FEEDBACK: Record<Exclude<AnswerFeedback, null>, { text: string; tone: stri
   unreadable: { text: "Platy couldn't read that one.", tone: "warm" },
 };
 
+// A quick check (R-01) has no second try: its answer tells Platy where to start, so a miss says
+// that instead of "keep going".
+const PROBE_FEEDBACK: Partial<typeof FEEDBACK> = {
+  incorrect: { text: "Not this one. That tells Platy where to start.", tone: "warm" },
+};
+
+/** What the card's top line calls this problem. */
+export function problemLabel(problem: Pick<Problem, "kind" | "position" | "total">): string {
+  if (problem.kind === "probe") return "Quick check";
+  if (problem.kind === "warmup" || problem.position === 0) return "Warm-up";
+  return `Problem ${problem.position} of ${problem.total}`;
+}
+
 interface Props {
   problem: Problem | null;
   feedback: AnswerFeedback;
   onAnswer: (problemId: string, text: string) => void;
   onHint: (problemId: string) => void;
+  /** The label of the button to what's next, while the server waits for the student. */
+  nextUp: string | null;
+  onNext: () => void;
 }
 
-export function ProblemCard({ problem, feedback, onAnswer, onHint }: Props) {
+export function ProblemCard({ problem, feedback, onAnswer, onHint, nextUp, onNext }: Props) {
   const [draft, setDraft] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
   const problemId = problem?.problem_id;
@@ -43,17 +60,16 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint }: Props) {
   }
 
   const solved = feedback === "correct";
+  const locked = solved || nextUp !== null;
   const submit = () => {
-    if (!draft.trim() || solved) return;
+    if (!draft.trim() || locked) return;
     onAnswer(problem.problem_id, draft.trim());
   };
-  const fb = showFeedback && feedback ? FEEDBACK[feedback] : null;
+  const fb = showFeedback && feedback ? ((problem.kind === "probe" && PROBE_FEEDBACK[feedback]) || FEEDBACK[feedback]) : null;
 
   return (
     <section className={`card problem${solved ? " problem--solved" : ""}`} aria-labelledby="problem-heading">
-      <p className="problem__count">
-        {problem.position > 0 ? `Problem ${problem.position} of ${problem.total}` : "Warm-up"}
-      </p>
+      <p className="problem__count">{problemLabel(problem)}</p>
       <h2 id="problem-heading" className="problem__instruction">
         {problem.instruction}
       </h2>
@@ -66,7 +82,7 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint }: Props) {
         label="Your answer"
         value={draft}
         placeholder="Your answer, like x = 4"
-        disabled={solved}
+        disabled={locked}
         onChange={(v) => {
           setDraft(v);
           setShowFeedback(false);
@@ -74,18 +90,23 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint }: Props) {
         onSubmit={submit}
       />
 
-      <div className="problem__actions">
-        <button type="button" className="btn btn--primary" onClick={submit} disabled={solved || !draft.trim()}>
-          Check my answer
-        </button>
-        <button type="button" className="btn btn--quiet" onClick={() => onHint(problem.problem_id)} disabled={solved}>
-          I need a hint
-        </button>
-      </div>
-
+      {/* The verdict sits above the way on, so it's read first and stays until the student moves. */}
       <p className={`problem__feedback${fb ? ` problem__feedback--${fb.tone}` : ""}`} role="status">
         {fb?.text ?? ""}
       </p>
+
+      {nextUp !== null ? (
+        <NextUp label={nextUp} onNext={onNext} />
+      ) : (
+        <div className="problem__actions">
+          <button type="button" className="btn btn--primary" onClick={submit} disabled={solved || !draft.trim()}>
+            Check my answer
+          </button>
+          <button type="button" className="btn btn--quiet" onClick={() => onHint(problem.problem_id)} disabled={solved}>
+            I need a hint
+          </button>
+        </div>
+      )}
     </section>
   );
 }

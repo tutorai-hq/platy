@@ -7,6 +7,8 @@ import { type Equation, equationTerms, planStep, type Side, type TermRef, termLa
 import type { Problem } from "../protocol";
 import type { StepsState } from "../session/state";
 import { Mascot } from "./Mascot";
+import { NextUp } from "./NextUp";
+import { problemLabel } from "./ProblemCard";
 import { LineEntry } from "./puzzles/LineEntry";
 
 interface Props {
@@ -14,12 +16,17 @@ interface Props {
   steps: StepsState;
   onStep: (problemId: string, line: number, text: string) => void;
   onHint: (problemId: string) => void;
+  /** The label of the button to what's next, while the server waits for the student. */
+  nextUp: string | null;
+  onNext: () => void;
 }
 
 const MARKS = {
   invalid: "This line doesn't follow from the one above. Find the slip and fix it.",
   unreadable: "Platy couldn't read this one. Write it as an equation with x.",
 };
+/** While a detour waits for the tap, the line is marked but not to be fixed yet (R-01). */
+const MARK_BEFORE_DETOUR = "This line doesn't follow from the one above.";
 
 // Motion (R-39): when a line is accepted, it's built from the line above. Terms that stay
 // slide down into place, a term that crosses the equals sign flies over and flips its sign,
@@ -33,7 +40,7 @@ const EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
 
 // Step-by-step solving (R-39): the student writes one line at a time under the problem. Each
 // line is checked before the next one opens, and a wrong line is marked where it is.
-export function StepSolver({ problem, steps, onStep, onHint }: Props) {
+export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: Props) {
   const rows = [problem.prompt, ...steps.lines];
   const card = useRef<HTMLElement>(null);
   const shown = useRef(rows.length);
@@ -57,9 +64,7 @@ export function StepSolver({ problem, steps, onStep, onHint }: Props) {
       className={`card problem stepsolver${solved ? " problem--solved" : ""}`}
       aria-labelledby="problem-heading"
     >
-      <p className="problem__count">
-        {problem.position > 0 ? `Problem ${problem.position} of ${problem.total}` : "Warm-up"}
-      </p>
+      <p className="problem__count">{problemLabel(problem)}</p>
       <h2 id="problem-heading" className="problem__instruction">
         {problem.instruction}
       </h2>
@@ -81,10 +86,16 @@ export function StepSolver({ problem, steps, onStep, onHint }: Props) {
       {/* The mark's words sit with the line, and are announced when they appear. */}
       <div className="ladder__why" role="status">
         {/* A known slip names the mistake on its line, never the fix (R-40, R-02). */}
-        {marked && !busy && (hint ? <p className="ladder__slip">{hint}</p> : <p>{MARKS[marked.result]}</p>)}
+        {marked && !busy && (
+          hint ? <p className="ladder__slip">{hint}</p>
+          : <p>{nextUp !== null && marked.result === "invalid" ? MARK_BEFORE_DETOUR : MARKS[marked.result]}</p>
+        )}
       </div>
 
-      {solved ? (
+      {/* A marked line stays on screen, with its words, until the student taps on (R-01). */}
+      {nextUp !== null ? (
+        <NextUp label={nextUp} onNext={onNext} />
+      ) : solved ? (
         <div className="stepsolver__done">
           <Mascot size={56} mood="happy" />
           <p>Every line checks out.</p>

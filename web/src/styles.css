@@ -107,6 +107,9 @@ button, input { font: inherit; color: inherit; }
 .problem--solved .problem__prompt { background: var(--good-wash); }
 .problem__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .problem__feedback { min-height: 1.5em; font-weight: 700; }
+/* The way on to a detour the server has ready (R-01): one big button where the answer buttons were. */
+.next-up { display: flex; }
+.next-up .btn { flex: 1; }
 .problem__feedback--good { color: var(--good); }
 .problem__feedback--warm { color: var(--warm); }
 

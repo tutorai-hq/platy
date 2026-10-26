@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BalancePuzzle, Puzzle } from "../content/types";
 import { SKINS } from "../mock/puzzles";
 import type { PrimerState, ServerEvent, StepResult } from "../protocol";
-import { initialState, reducer, type SessionState } from "./state";
+import { initialState, platyIsTyping, reducer, type SessionState } from "./state";
 
 const live = (): SessionState => reducer(initialState, { type: "started" });
 
@@ -109,7 +109,7 @@ describe("session reducer", () => {
 
     it("holds the chat from keep going until the next problem, so nothing lands on the wrong one", () => {
       const problem = {
-        type: "problem" as const, problem_id: "p1", skill_id: "s", prompt: "3x + 5 = 20", instruction: "Solve", format: "answer" as const,
+        type: "problem" as const, problem_id: "p1", skill_id: "s", prompt: "3x + 5 = 20", instruction: "Solve", format: "answer" as const, kind: "practice" as const,
         position: 1, total: 3,
       };
       let s = verdict(show(live(), scale), "solved", "correct");
@@ -139,7 +139,7 @@ describe("session reducer", () => {
   describe("step-by-step problems (R-39)", () => {
     const stepProblem = {
       type: "problem" as const, problem_id: "s1", skill_id: "two_step_equations", prompt: "2x + 5 = 17",
-      instruction: "Solve it one line at a time", format: "steps" as const, position: 1, total: 2,
+      instruction: "Solve it one line at a time", format: "steps" as const, kind: "practice" as const, position: 1, total: 2,
     };
     const at = () => reducer(reducer(initialState, { type: "started" }), { type: "server", event: stepProblem });
     const result = (s: SessionState, line: number, r: StepResult, slip?: string) =>
@@ -222,6 +222,44 @@ describe("session reducer", () => {
       expect(reducer(s, { type: "server", event: { type: "session_end", solved: 1 } }).primer).toBeNull();
       expect(reducer(s, { type: "server", event: { type: "error", code: "socket_closed" } }).primer).toBeNull();
       expect(reducer(s, { type: "started" }).primer).toBeNull();
+    });
+  });
+
+  describe("detours that wait for a tap (R-01)", () => {
+    it("holds the label of the way on until the student taps, then waits for what's next", () => {
+      let s = live();
+      s = reducer(s, { type: "server", event: { type: "next_up", label: "Quick check" } });
+      expect(s.nextUp).toBe("Quick check");
+      s = reducer(s, { type: "continue_sent" });
+      expect(s.nextUp).toBeNull();
+      expect(s.moving).toBe(true);
+    });
+
+    it("drops the button at a reset, a new problem or the session's end", () => {
+      const up = reducer(live(), { type: "server", event: { type: "next_up", label: "Quick check" } });
+      expect(reducer(up, { type: "server", event: { type: "reset", reason: "topic_switch" } }).nextUp).toBeNull();
+      const problem = {
+        type: "problem" as const, problem_id: "q", skill_id: "s", prompt: "x - 8 = -3", instruction: "Solve for x",
+        format: "answer" as const, kind: "probe" as const, position: 0, total: 5,
+      };
+      expect(reducer(up, { type: "server", event: problem }).nextUp).toBeNull();
+      expect(reducer(up, { type: "server", event: { type: "session_end", solved: 0 } }).nextUp).toBeNull();
+    });
+
+    it("ignores a tap when nothing waits", () => {
+      const s = live();
+      expect(reducer(s, { type: "continue_sent" })).toBe(s);
+    });
+  });
+
+  describe("Platy's typing dots", () => {
+    const msg = (from: "tutor" | "child") => ({ id: from, from, text: "hi", streaming: false });
+    it("show only while a reply to the student is due", () => {
+      expect(platyIsTyping([msg("tutor"), msg("child")], null)).toBe(true);
+      expect(platyIsTyping([msg("child"), msg("tutor")], null)).toBe(false);
+      // An empty chat after a new page has nothing more coming: no dots running on.
+      expect(platyIsTyping([], null)).toBe(false);
+      expect(platyIsTyping([msg("child")], "Quick check")).toBe(false);
     });
   });
 });

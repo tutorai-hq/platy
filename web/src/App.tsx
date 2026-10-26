@@ -95,9 +95,18 @@ export function App() {
                   steps={s.state.steps}
                   onStep={s.step}
                   onHint={s.hint}
+                  nextUp={s.state.nextUp}
+                  onNext={s.next}
                 />
               ) : (
-                <ProblemCard problem={s.state.problem} feedback={s.state.feedback} onAnswer={s.answer} onHint={s.hint} />
+                <ProblemCard
+                  problem={s.state.problem}
+                  feedback={s.state.feedback}
+                  onAnswer={s.answer}
+                  onHint={s.hint}
+                  nextUp={s.state.nextUp}
+                  onNext={s.next}
+                />
               )}
               <Chat
                 messages={s.state.messages}
