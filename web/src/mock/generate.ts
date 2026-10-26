@@ -1,4 +1,9 @@
 import type { Pans } from "../content/types";
+import { evaluate } from "../math/evaluate";
+import { parseMathStrict } from "../math/parse";
+import { readAnswer } from "./answers";
+import { hasSolution, linearForm, near } from "./grade";
+import { slipValues } from "./slips";
 
 // Mock-only problem generators for the puzzle templates. They follow each item's
 // generator rules (content/prompts/puzzle-v1.md), so every instance has whole-number answers
@@ -19,7 +24,7 @@ export function seeded(seed: number): Rng {
 }
 
 const int = (rng: Rng, lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
-const gcd = (m: number, n: number): number => (n === 0 ? m : gcd(n, m % n));
+export const gcd = (m: number, n: number): number => (n === 0 ? m : gcd(n, m % n));
 
 function draw<T>(rng: Rng, make: (rng: Rng) => T | null): T {
   for (let i = 0; i < 10_000; i++) {
@@ -151,5 +156,288 @@ export function workedExample(rng: Rng): WorkedInstance {
     a, b, c, answer, equation, latex, expected, slip, order,
     linesLatex: [`${a}x = ${c - b}`, `x = ${answer}`],
     divideFirst: `x + ${b}/${a} = ${c}/${a}`,
+  };
+}
+
+// Problem generators for the demo skills (R-41). Three levels each: 1 small positive whole
+// numbers, 2 negatives or bigger numbers, 3 a fraction or decimal in the answer or an extra
+// step. Every problem is checked before it's returned, and a session never repeats one. The
+// real generators live on the server behind platy.mathcheck (docs/proposals/generators-python.md).
+
+export const DEMO_NODES = [
+  "integer_arithmetic",
+  "inverse_operations",
+  "one_step_equations",
+  "two_step_equations",
+  "order_of_operations",
+] as const;
+export type DemoNode = (typeof DEMO_NODES)[number];
+export type Level = 1 | 2 | 3;
+export const LEVELS: readonly Level[] = [1, 2, 3];
+
+export interface GeneratedProblem {
+  node: DemoNode;
+  level: Level;
+  /** Checker syntax ("2x + 5 = 17", "(-6)*(-4)", "x - 4 + b = x"); also what keeps a session from repeating. */
+  prompt: string;
+  answer: number;
+  /** The answer as a student would type it: "7", "-3", "5/2", "-3.5". */
+  answerText: string;
+  /** The wrong answers known slips lead to (R-40), so a wrong answer can be matched to one. */
+  slips: { slip: string; value: number }[];
+}
+
+type Draft = Pick<GeneratedProblem, "prompt" | "answer" | "answerText">;
+type Maker = (rng: Rng) => Draft | null;
+
+/** A whole number from lo to hi, either sign. */
+const signed = (rng: Rng, lo: number, hi: number) => int(rng, lo, hi) * (rng() < 0.5 ? -1 : 1);
+/** "+ 5" or "- 5", for the term after x. */
+const plus = (n: number) => (n < 0 ? `- ${-n}` : `+ ${n}`);
+/**
+ * Level 2 keeps only problems with a negative number in them (a minus that starts a number,
+ * not one that subtracts), a negative answer, or a number past 12.
+ */
+function level2(make: Maker): Maker {
+  return (rng) => {
+    const d = make(rng);
+    if (!d) return null;
+    const negative = /(^|[(+\-*/=]\s*)-\s*\d/.test(d.prompt) || d.answer < 0;
+    return negative || (d.prompt.match(/\d+/g) ?? []).some((n) => Number(n) > 12) ? d : null;
+  };
+}
+
+function whole(prompt: string, answer: number): Draft {
+  return { prompt, answer, answerText: String(answer) };
+}
+
+/** n/d in lowest terms, the sign on top. */
+function ratio(n: number, d: number): Pick<Draft, "answer" | "answerText"> {
+  const g = gcd(Math.abs(n), Math.abs(d));
+  const [p, q] = d < 0 ? [-n / g, -d / g] : [n / g, d / g];
+  return { answer: p / q, answerText: q === 1 ? `${p}` : `${p}/${q}` };
+}
+
+/** a*x + b = c, written the way the step solver shows it. */
+function linear(a: number, b: number, c: number, answer: Pick<Draft, "answer" | "answerText">): Draft {
+  return { prompt: `${a}x ${plus(b)} = ${c}`, ...answer };
+}
+
+const MAKERS: Record<DemoNode, Record<Level, Maker>> = {
+  integer_arithmetic: {
+    1: (r) => {
+      const [a, b, c] = [int(r, 1, 12), int(r, 1, 12), int(r, 1, 12)];
+      const form = int(r, 0, 2);
+      if (form === 2) return whole(`${a}*${b}`, a * b);
+      const answer = form === 0 ? a + b - c : a - b + c;
+      return answer < 0 ? null : whole(form === 0 ? `${a} + ${b} - ${c}` : `${a} - ${b} + ${c}`, answer);
+    },
+    2: level2((r) => {
+      const [a, b, c] = [int(r, 2, 20), int(r, 2, 12), int(r, 1, 20)];
+      switch (int(r, 0, 4)) {
+        case 0:
+          return whole(`-${a} + ${b} - ${c}`, -a + b - c);
+        case 1:
+          return whole(`(-${a})*(-${b})`, a * b);
+        case 2:
+          return whole(`(-${a * b})/(-${b})`, a);
+        case 3:
+          return whole(`${a}*(-${b})`, -a * b);
+        default:
+          return a - b - c < 0 ? whole(`${a} - ${b} - ${c}`, a - b - c) : null;
+      }
+    }),
+    3: (r) => {
+      const [a, b, c, d] = [int(r, 2, 12), int(r, 2, 9), int(r, 2, 20), int(r, 2, 9)];
+      switch (int(r, 0, 2)) {
+        case 0:
+          return whole(`(-${a})*(-${b}) - ${c} + ${d}`, a * b - c + d);
+        case 1:
+          return whole(`${a}*(-${b}) - ${c}*${d}`, -a * b - c * d);
+        default:
+          return whole(`(-${a * b})/(-${b}) + ${c}*(-${d})`, a - c * d);
+      }
+    },
+  },
+  order_of_operations: {
+    1: (r) => {
+      const [a, b, c] = [int(r, 1, 12), int(r, 2, 6), int(r, 2, 6)];
+      switch (int(r, 0, 3)) {
+        case 0:
+          return whole(`${a} + ${b}*${c}`, a + b * c);
+        case 1:
+          return whole(`${b}*${c} + ${a}`, b * c + a);
+        case 2:
+          return a - b * c >= 0 ? whole(`${a} - ${b}*${c}`, a - b * c) : null;
+        default:
+          return b * c <= 12 ? whole(`${b * c}/${b} + ${a}`, c + a) : null;
+      }
+    },
+    2: level2((r) => {
+      const [a, b, c, d] = [int(r, 2, 20), int(r, 2, 9), int(r, 1, 12), int(r, 1, 12)];
+      switch (int(r, 0, 2)) {
+        case 0:
+          return whole(`${b}*(${c} - ${a})`, b * (c - a));
+        case 1:
+          return whole(`${a} - ${b}*(${c} + ${d})`, a - b * (c + d));
+        default:
+          return whole(`(${c} + ${d})*${b} - ${a}`, (c + d) * b - a);
+      }
+    }),
+    3: (r) => {
+      const [a, b, c, d, e, f] = [int(r, 1, 20), int(r, 1, 20), int(r, 2, 6), int(r, 2, 6), int(r, 2, 12), int(r, 1, 12)];
+      if (e === f) return null;
+      if (int(r, 0, 1) === 0) {
+        return (a + b) % c === 0 ? whole(`(${a} + ${b})/${c} - ${d}*(${e} - ${f})`, (a + b) / c - d * (e - f)) : null;
+      }
+      return (a * c) % (e + f) === 0 ? whole(`${d}*(${e} - ${f}) + ${a * c}/(${e} + ${f})`, d * (e - f) + (a * c) / (e + f)) : null;
+    },
+  },
+  inverse_operations: {
+    // "x - 4 + b = x": what b brings x back.
+    // Level 1 keeps answers positive: taking a number away, or dividing.
+    1: (r) => {
+      const n = int(r, 1, 12);
+      if (rng01(r)) return undo(`x - ${n} + b = x`);
+      return n < 2 ? null : undo(`(x/${n})*b = x`, ratio(n, 1));
+    },
+    2: level2((r) => {
+      switch (int(r, 0, 2)) {
+        case 0:
+          return undo(rng01(r) ? `x + ${int(r, 1, 12)} + b = x` : `x ${plus(signed(r, 13, 40))} + b = x`);
+        case 1: {
+          const n = int(r, 13, 30);
+          return undo(`(x/${n})*b = x`, ratio(n, 1));
+        }
+        default: {
+          const n = int(r, 2, 12);
+          return undo(`(x/(-${n}))*b = x`, ratio(-n, 1));
+        }
+      }
+    }),
+    3: (r) => {
+      if (rng01(r)) {
+        const [p, q] = [int(r, 1, 9), int(r, 2, 9)];
+        if (p === q || gcd(p, q) !== 1) return null;
+        return p === 1 ? undo(`${q}x*b = x`, ratio(1, q)) : undo(`(${p}/${q})x*b = x`, ratio(q, p));
+      }
+      const k = int(r, 0, 9) + 0.5;
+      return undo(`x ${plus(rng01(r) ? k : -k)} + b = x`);
+    },
+  },
+  one_step_equations: {
+    1: (r) => {
+      const [a, n] = [int(r, 2, 9), int(r, 1, 12)];
+      switch (int(r, 0, 3)) {
+        case 0:
+          return whole(`x + ${a} = ${n + a}`, n);
+        case 1:
+          return n - a > 0 ? whole(`x - ${a} = ${n - a}`, n) : null;
+        case 2:
+          return whole(`${a}x = ${a * n}`, n);
+        default:
+          return whole(`x/${a} = ${n}`, a * n);
+      }
+    },
+    2: level2((r) => {
+      const [a, b, n] = [signed(r, 2, 12), signed(r, 1, 30), signed(r, 1, 15)];
+      switch (int(r, 0, 2)) {
+        case 0:
+          return whole(`x ${plus(b)} = ${n + b}`, n);
+        case 1:
+          return whole(`${a}x = ${a * n}`, n);
+        default: {
+          const d = Math.abs(a);
+          return whole(`x/${d} = ${n}`, d * n);
+        }
+      }
+    }),
+    3: (r) => {
+      const [a, c] = [int(r, 2, 9), signed(r, 1, 40)];
+      return c % a === 0 ? null : { prompt: `${a}x = ${c}`, ...ratio(c, a) };
+    },
+  },
+  two_step_equations: {
+    1: (r) => {
+      const [a, b, n] = [int(r, 2, 9), int(r, 1, 12), int(r, 1, 12)];
+      const minus = rng01(r);
+      const c = minus ? a * n - b : a * n + b;
+      return c > 0 ? linear(a, minus ? -b : b, c, ratio(n, 1)) : null;
+    },
+    2: level2((r) => {
+      const [a, b, n] = [signed(r, 2, 9), signed(r, 1, 30), signed(r, 1, 12)];
+      return linear(a, b, a * n + b, ratio(n, 1));
+    }),
+    3: (r) => {
+      const [a, b, c] = [int(r, 2, 6), signed(r, 1, 20), int(r, -30, 40)];
+      return (c - b) % a === 0 ? null : linear(a, b, c, ratio(c - b, a));
+    },
+  },
+};
+
+const rng01 = (rng: Rng) => rng() < 0.5;
+
+
+/** An undo question. A shift's answer is the number with its sign flipped. */
+function undo(prompt: string, answer?: Pick<Draft, "answer" | "answerText">): Draft {
+  if (answer) return { prompt, ...answer };
+  const n = Number(/x ([+-]) ([\d.]+)/.exec(prompt)!.slice(1).join(""));
+  return { prompt, answer: -n, answerText: String(-n) };
+}
+
+const CHECKED_AS: Record<DemoNode, "value" | "undo" | "equation"> = {
+  integer_arithmetic: "value",
+  order_of_operations: "value",
+  inverse_operations: "undo",
+  one_step_equations: "equation",
+  two_step_equations: "equation",
+};
+
+/** The checker's verdict on a problem and its answer (platy.mathcheck on the server). */
+export function verifyProblem(p: Pick<GeneratedProblem, "node" | "prompt" | "answer" | "answerText">): boolean {
+  // The text the student would type must say exactly the answer, not a rounding of it.
+  const typed = readAnswer(p.answerText);
+  if (typed?.length !== 1 || !near(typed[0]!, p.answer)) return false;
+  switch (CHECKED_AS[p.node]) {
+    case "value": {
+      const node = parseMathStrict(p.prompt);
+      const v = node && node.kind !== "rel" ? evaluate(node) : null;
+      return v?.length === 1 && near(v[0]!, p.answer);
+    }
+    case "undo": {
+      // Put the answer in for b: the two sides must then be the same for every x.
+      const f = linearForm(p.prompt.replace(/\bb\b/, `(${p.answerText})`));
+      return f !== null && near(f.a, 0) && near(f.b, 0);
+    }
+    case "equation":
+      return hasSolution(p.prompt, p.answer);
+  }
+}
+
+function finish(node: DemoNode, level: Level, d: Draft): GeneratedProblem {
+  const p = { node, level, ...d, slips: slipValues(node, { prev: d.prompt, answer: d.answerText }) };
+  // Never show a problem the checker hasn't passed (R-41).
+  if (!verifyProblem(p)) throw new Error(`generated problem failed the check: ${node} L${level}`);
+  return p;
+}
+
+/** One problem for a skill at a level. Seeded, so the same rng gives the same problem. */
+export function makeProblem(node: DemoNode, level: Level, rng: Rng): GeneratedProblem {
+  return finish(node, level, draw(rng, MAKERS[node][level]));
+}
+
+/** A session's problems: seeded, and never the same problem twice. */
+export function problemSession(seed: number): { next: (node: DemoNode, level: Level) => GeneratedProblem } {
+  const rng = seeded(seed);
+  const seen = new Set<string>();
+  return {
+    next(node, level) {
+      const d = draw(rng, (r) => {
+        const found = MAKERS[node][level](r);
+        return found && !seen.has(found.prompt) ? found : null;
+      });
+      seen.add(d.prompt);
+      return finish(node, level, d);
+    },
   };
 }

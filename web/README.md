@@ -138,6 +138,12 @@ put in error text (P-1, P-10, A-4). It checks each new line against the last wit
 `steps` problem the server ignores a bare `answer`, so the final answer alone never counts. The
 motion is drawn in the browser from the two lines (`src/math/terms.ts`) and never grades.
 
+Generated problems (R-41): `src/mock/generate.ts` makes problems for the five demo skills at three
+levels (1 small positive whole numbers, 2 negatives or bigger numbers, 3 a fraction or decimal
+answer or an extra step). They're seeded, never repeat within a session, are checked before
+they're returned, and carry the wrong answers their slips lead to. The scripted lesson doesn't
+use them yet. The real generators belong on the server (`docs/proposals/generators-python.md`).
+
 `answer_result`, `instruction`/`position`/`total` on `problem`, and `resume` are additions to the
 plan's first draft; they let the problem card give feedback and show progress. Answers are sent
 as the child typed them (`x^2 = 49`, `±7`, and `×` and `÷` from the keypad); the server does the

@@ -10,7 +10,12 @@ import { linearForm, near, sides } from "./grade";
 // backend. Each rule rebuilds what the student would have written after one known wrong move
 // and compares values, so any arrangement of the same wrong line still matches.
 
-type Rule = (ex: SlipExample) => boolean;
+interface Rule {
+  /** Where the slip leads from the line above: the wrong values it gives, never the right one. */
+  values: (ex: Omit<SlipExample, "next">) => number[];
+  /** The number the student's line says, or null when the line doesn't look like this slip. */
+  said: (ex: SlipExample) => number | null;
+}
 
 /** a*x + b = c with x on one side only, or null. */
 function shape(text: string): { a: number; b: number; c: number } | null {
@@ -61,14 +66,18 @@ function equationRule(
   forms: Form[],
   wrong: (a: number, b: number, c: number) => number[],
 ): Rule {
-  return ({ prev, next }) => {
-    const s = shape(prev);
-    const n = written(next);
-    const x = solution(next);
-    if (!s || !n || x === null || !applies(s.a, s.b, s.c)) return false;
-    if (!forms.some((f) => hasForm(f, s.a, n))) return false;
-    const right = (s.c - s.b) / s.a;
-    return !near(x, right) && wrong(s.a, s.b, s.c).some((w) => near(x, w));
+  return {
+    values: ({ prev }) => {
+      const s = shape(prev);
+      if (!s || !applies(s.a, s.b, s.c)) return [];
+      const right = (s.c - s.b) / s.a;
+      return wrong(s.a, s.b, s.c).filter((w) => !near(w, right));
+    },
+    said: ({ prev, next }) => {
+      const s = shape(prev);
+      const n = written(next);
+      return s && n && forms.some((f) => hasForm(f, s.a, n)) ? solution(next) : null;
+    },
   };
 }
 
@@ -78,32 +87,35 @@ function answerValue(next: string): number | null {
   return v?.length === 1 ? v[0]! : null;
 }
 
-/** An expression to work out (no "="), its value, and the student's number. */
-function arithmetic(ex: SlipExample): { node: Node; value: number; said: number } | null {
-  const node = parseMathStrict(ex.prev);
+/** An expression to work out (no "=") and its value. */
+function expression(prev: string): { node: Node; value: number } | null {
+  const node = parseMathStrict(prev);
   if (!node || node.kind === "rel" || node.kind === "list") return null;
   const value = evaluate(node);
-  const said = answerValue(ex.next);
-  return value?.length === 1 && said !== null ? { node, value: value[0]!, said } : null;
+  return value?.length === 1 ? { node, value: value[0]! } : null;
 }
 
 /** An arithmetic rule: `wrong` is the value the slip gives, or null if it can't happen here. */
 function arithmeticRule(wrong: (node: Node, value: number, prev: string) => number | null): Rule {
-  return (ex) => {
-    const a = arithmetic(ex);
-    if (!a || near(a.said, a.value)) return false;
-    const w = wrong(a.node, a.value, ex.prev);
-    return w !== null && !near(w, a.value) && near(a.said, w);
+  return {
+    values: ({ prev }) => {
+      const e = expression(prev);
+      const w = e && wrong(e.node, e.value, prev);
+      return e && w !== null && !near(w, e.value) ? [w] : [];
+    },
+    said: ({ next }) => answerValue(next),
   };
 }
 
 /** An undo question ("x - 4 + b = x"): the right answer comes with the example. */
 function undoRule(scales: boolean, wrong: (answer: number) => number): Rule {
-  return ({ prev, next, answer }) => {
-    if (answer === undefined || undoKind(prev) !== (scales ? "scale" : "shift")) return false;
-    const right = answerValue(answer);
-    const said = answerValue(next);
-    return right !== null && said !== null && !near(said, right) && near(said, wrong(right));
+  return {
+    values: ({ prev, answer }) => {
+      const right = answer === undefined ? null : answerValue(answer);
+      if (right === null || undoKind(prev) !== (scales ? "scale" : "shift")) return [];
+      return [wrong(right)].filter((w) => !near(w, right));
+    },
+    said: ({ next }) => answerValue(next),
   };
 }
 
@@ -238,9 +250,28 @@ function chain(node: string): string[] {
  * Two slips on the same skill that both fit can't be told apart, so neither is named.
  */
 export function detectSlip(node: string, ex: SlipExample): string | null {
+  const matches = (rule: Rule | undefined) => {
+    const said = rule?.said(ex) ?? null;
+    return said !== null && rule!.values(ex).some((w) => near(said, w));
+  };
   for (const id of chain(node)) {
-    const hits = SLIPS.filter((slip) => slip.node === id && RULES[slip.id]?.(ex));
+    const hits = SLIPS.filter((slip) => slip.node === id && matches(RULES[slip.id]));
     if (hits.length > 0) return hits.length === 1 ? hits[0]!.id : null;
   }
   return null;
+}
+
+/**
+ * The wrong answers each slip would give on a problem (its own skill's slips and its
+ * prerequisites'), so a wrong answer can be matched to a slip (R-41). Two slips can share a
+ * value; detectSlip names neither then.
+ */
+export function slipValues(node: string, problem: Omit<SlipExample, "next">): { slip: string; value: number }[] {
+  const out: { slip: string; value: number }[] = [];
+  for (const id of chain(node)) {
+    for (const slip of SLIPS.filter((s) => s.node === id)) {
+      for (const value of RULES[slip.id]?.values(problem) ?? []) out.push({ slip: slip.id, value });
+    }
+  }
+  return out;
 }
