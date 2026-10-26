@@ -70,7 +70,7 @@ export function WorkedExample({ state, onMove, actions }: Props) {
       </ol>
 
       {!askWhy && stage === "why" && (
-        <div className="problem__actions">
+        <div className="problem__actions dock-bottom">
           <button type="button" className="btn btn--primary" onClick={() => setSeen(seen + 1)}>
             Next step
           </button>
@@ -102,7 +102,7 @@ export function WorkedExample({ state, onMove, actions }: Props) {
               </button>
             ))}
           </div>
-          {stage === "why" && <div className="problem__actions">{actions}</div>}
+          {stage === "why" && <div className="problem__actions dock-bottom">{actions}</div>}
         </>
       )}
       {stage === "first_step" && (
@@ -130,7 +130,7 @@ export function WorkedExample({ state, onMove, actions }: Props) {
           {actions}
         </LineEntry>
       )}
-      {stage === "done" && <div className="problem__actions">{actions}</div>}
+      {stage === "done" && <div className="problem__actions dock-bottom">{actions}</div>}
     </>
   );
 }

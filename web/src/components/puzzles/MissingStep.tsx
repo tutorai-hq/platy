@@ -40,7 +40,7 @@ export function MissingStep({ state, onMove, actions }: Props) {
       </ol>
 
       {done ? (
-        <div className="problem__actions">{actions}</div>
+        <div className="problem__actions dock-bottom">{actions}</div>
       ) : (
         <LineEntry
           id="missing"

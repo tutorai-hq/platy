@@ -64,7 +64,7 @@ export function SpotTheError({ state, onMove, actions }: Props) {
       {stage === "find" && (
         <>
           <p className="puzzle__ask">Tap the line that's wrong.</p>
-          <div className="problem__actions">{actions}</div>
+          <div className="problem__actions dock-bottom">{actions}</div>
         </>
       )}
       {stage === "fix" && (
@@ -96,7 +96,7 @@ export function SpotTheError({ state, onMove, actions }: Props) {
           {actions}
         </LineEntry>
       )}
-      {stage === "done" && <div className="problem__actions">{actions}</div>}
+      {stage === "done" && <div className="problem__actions dock-bottom">{actions}</div>}
     </>
   );
 }

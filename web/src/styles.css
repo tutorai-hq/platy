@@ -110,7 +110,11 @@ button, input { font: inherit; color: inherit; }
 .problem__prompt .katex-display { margin: 0; }
 .problem--solved .problem__prompt { background: var(--good-wash); }
 .problem__actions { display: flex; flex-wrap: wrap; gap: 10px; }
-/* The card scrolls when the work gets long; its buttons stay in view at its bottom (R-27). */
+/* The card scrolls when the work gets long; its buttons stay in view at its bottom (R-27). A
+   puzzle's verdict line sits just above its buttons, so a pinned row never covers it. The balance
+   scale's own move buttons come first there, so its row of extras isn't pinned over them. */
+.session .puzzle > .problem__feedback { order: 1; }
+.session .puzzle > .problem__actions { order: 2; }
 .session .dock-bottom {
   position: sticky; bottom: -28px; z-index: 1; margin: 0 -28px -28px; padding: 12px 28px 28px;
   background: linear-gradient(to bottom, rgb(255 255 255 / 0%), var(--card) 12px);
