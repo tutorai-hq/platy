@@ -47,7 +47,8 @@ export const KEYPAD: { symbols: Key[]; numbers: Key[] } = {
     type("4", "4"), type("5", "5"), type("6", "6"), type("×", "times", "op"),
     type("1", "1"), type("2", "2"), type("3", "3"), type("−", "minus", "op", "-"),
     type("0", "0"), type(".", "point"), type("=", "equals", "op"), type("+", "plus", "op"),
-    { label: "↵", aria: "check", action: { kind: "submit" } },
+    // A word, not an arrow: on a phone this key is the only Check in reach (teen test 2026-10-26).
+    { label: "Check", aria: "check", action: { kind: "submit" } },
   ],
 };
 

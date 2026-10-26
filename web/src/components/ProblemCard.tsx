@@ -93,6 +93,7 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
         placeholder={answerPlaceholder(problem)}
         disabled={locked}
         autoFocus="laptop"
+        intoView
         select={select}
         onChange={(v) => {
           setDraft(v);

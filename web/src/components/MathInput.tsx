@@ -4,6 +4,7 @@ import { childMathToLatex } from "../math/latex";
 import { MathText, Tex } from "../math/MathText";
 import { TutorLine } from "../session/tutorLine";
 import { canCheck } from "./answer";
+import { useIntoView } from "./intoView";
 
 interface Props {
   id: string;
@@ -19,13 +20,17 @@ interface Props {
   clearLabel?: string;
   /** Each change selects the box's text on a laptop, so typing replaces it (R-18). */
   select?: number;
+  /** On a scrolling card, bring the keypad into view when the box appears, so no key is hidden (R-27). */
+  intoView?: boolean;
 }
 
 // A phone or tablet has no fine pointer. There, focus docks the keypad over the problem.
 const onLaptop = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: fine)").matches === true;
 
-export function MathInput({ id, label, value, placeholder, onChange, onSubmit, disabled, autoFocus, clearLabel = "Clear answer", select = 0 }: Props) {
+export function MathInput({ id, label, value, placeholder, onChange, onSubmit, disabled, autoFocus, clearLabel = "Clear answer", select = 0, intoView = false }: Props) {
   const input = useRef<HTMLInputElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
+  useIntoView(dock, id, intoView);
   // On a phone or tablet the keypad stands in for the device keyboard, so the box asks for none
   // (inputMode "none"). "abc" brings the device keyboard back for letters and words; any other key
   // puts it away again. A laptop's own keyboard types either way.
@@ -151,7 +156,7 @@ export function MathInput({ id, label, value, placeholder, onChange, onSubmit, d
           </>
         )}
       </p>
-      <div className="keypad-dock">
+      <div className="keypad-dock" ref={dock}>
         {/* On a phone the docked keypad covers the chat, so Platy's newest line sits above it (R-27).
             The chat log already reads it out, so screen readers skip this copy. A tap here leaves
             the box, which puts the keypad away and shows the whole chat. */}

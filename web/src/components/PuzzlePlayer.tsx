@@ -1,4 +1,5 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { useIntoView } from "./intoView";
 import { pansLatex } from "../content/balance";
 import { PALETTE } from "../content/palette";
 import type { PaletteId, PuzzleMove } from "../content/types";
@@ -34,6 +35,8 @@ export function PuzzlePlayer({ state, moving, onSolved, onMove, onHint, onNext, 
   const move = (m: PuzzleMove, echo?: string) => onMove(id, m, echo);
   const fb = feedback(state);
   const card = useRef<HTMLElement>(null);
+  // The verdict sits by the pinned buttons; a new one scrolls into view above them (R-27).
+  const verdict = useRef<HTMLParagraphElement>(null);
 
   // Solving removes the control that had focus. Move on unless the child is already elsewhere.
   useEffect(() => {
@@ -56,6 +59,8 @@ export function PuzzlePlayer({ state, moving, onSolved, onMove, onHint, onNext, 
       I need a hint
     </button>
   );
+
+  useIntoView(verdict, fb?.text ?? null);
 
   return (
     <section
@@ -100,7 +105,7 @@ export function PuzzlePlayer({ state, moving, onSolved, onMove, onHint, onNext, 
         <WorkedExample state={{ ...state, puzzle: state.puzzle }} onMove={move} actions={actions} />
       )}
 
-      <p className={`problem__feedback${fb ? ` problem__feedback--${fb.tone}` : ""}`} role="status">
+      <p className={`problem__feedback${fb ? ` problem__feedback--${fb.tone}` : ""}`} role="status" ref={verdict}>
         {fb?.text ?? ""}
       </p>
     </section>

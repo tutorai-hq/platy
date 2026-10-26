@@ -34,6 +34,7 @@ export function LineEntry({ id, prompt, placeholder, button, onSubmit, busy, aut
         value={draft}
         placeholder={placeholder}
         autoFocus={autoFocus}
+        intoView
         onChange={setDraft}
         onSubmit={submit}
         clearLabel="Clear line"

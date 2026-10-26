@@ -34,7 +34,7 @@ years ago counts as not yet, since there's no day). A later date shows the "Than
 by" screen, which holds until you reload the page.
 
 1. **Problems 1 and 2, `2x + 5 = 17` and `3x - 4 = 11`, line by line (R-39).** Write one step
-   under the equation and press Enter (or the keypad's **↵**). A good line gets a check, and the
+   under the equation and press Enter (or the keypad's **Check** key). A good line gets a check, and the
    algebra moves: a term that crosses the equals sign flies over and flips its sign
    (`2x = 12`), a divisor goes across as `÷ 2` (`x = 6`), a move written out on both sides drops in
    (`3x - 4 + 4 = 11 + 4`), and worked-out terms fade together (`3x = 15`). A wrong line
@@ -61,11 +61,14 @@ by" screen, which holds until you reload the page.
    never the answer), × clears it, a wrong or unreadable answer is selected so typing replaces
    it, and Check waits until "Platy reads" can show all of it. **The math keypad** sits under every math box. On a phone (try it at 390×844 with touch)
    it docks at the bottom like a keyboard while the box has focus, and the phone's own keyboard
-   stays down. **abc** brings that keyboard back for letters and words, and **↵** checks the
-   answer. On a laptop the keypad stays under the box; its keys are out of the Tab order because
+   stays down. **abc** brings that keyboard back for letters and words, and the tall **Check** key
+   checks the answer (a word, not an arrow: testers guessed at the arrow). On a laptop the keypad stays under the box; its keys are out of the Tab order because
    a keyboard types everything directly. The docked keypad covers the chat, so Platy's newest
    line sits in a strip above the keys (R-27). When the work gets long, the card scrolls and its
-   buttons stay pinned at its bottom, and the chat starts a long reply at its first line.
+   buttons stay pinned at its bottom; whatever appears under that row (the keypad's last row, a
+   choice, a verdict) scrolls into view above it. On a phone the card keeps to about half the
+   screen, so the newest reply in the chat below it reads whole, and the chat starts a long reply
+   at its first line.
 
 8. **Puzzles (R-37).** On problem 3, answer `25/3` (adding the 5 instead of subtracting it).
    Platy sends you to a spot-the-error puzzle about the same slip, then back to problem 3.

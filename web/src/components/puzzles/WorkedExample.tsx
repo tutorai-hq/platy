@@ -1,9 +1,10 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { workedStage } from "../../content/progress";
 import type { PuzzleMove, WorkedExamplePuzzle } from "../../content/types";
 import { childMathToLatex } from "../../math/latex";
 import { MathText, Tex } from "../../math/MathText";
 import type { PuzzleState } from "../../session/state";
+import { useIntoView } from "../intoView";
 import { LineEntry } from "./LineEntry";
 
 interface Props {
@@ -36,6 +37,10 @@ export function WorkedExample({ state, onMove, actions }: Props) {
     });
     onMove(i === 0 ? { check: "first_step", text } : { check: "final_answer", text }, text);
   };
+
+  // The choices appear under the pinned hint button; bring them into view (R-27).
+  const choices = useRef<HTMLDivElement>(null);
+  useIntoView(choices, askWhy);
 
   return (
     <>
@@ -81,7 +86,7 @@ export function WorkedExample({ state, onMove, actions }: Props) {
           <p className="puzzle__ask" id="why-ask">
             <MathText text={puzzle.why.question} />
           </p>
-          <div className="choices" role="group" aria-labelledby="why-ask">
+          <div className="choices" role="group" aria-labelledby="why-ask" ref={choices}>
             {puzzle.why.choices.map((choice, k) => (
               <button
                 key={k}
