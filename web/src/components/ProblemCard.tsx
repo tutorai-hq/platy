@@ -109,7 +109,7 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
       {nextUp !== null ? (
         <NextUp label={nextUp} onNext={onNext} />
       ) : (
-        <div className="problem__actions">
+        <div className="problem__actions dock-bottom">
           <button type="button" className="btn btn--primary" onClick={submit} disabled={solved || !draft.trim()}>
             Check my answer
           </button>

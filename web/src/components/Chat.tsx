@@ -1,6 +1,7 @@
 import { type Ref, useEffect, useRef, useState } from "react";
 import { MathText } from "../math/MathText";
 import { type ChatMessage, platyIsTyping } from "../session/state";
+import { chatScrollTop } from "../session/tutorLine";
 
 interface Props {
   messages: ChatMessage[];
@@ -19,11 +20,15 @@ interface Props {
 
 export function Chat({ messages, resetNote, disabled, hold, inputRef, onSay }: Props) {
   const [draft, setDraft] = useState("");
-  const end = useRef<HTMLDivElement>(null);
+  const log = useRef<HTMLDivElement>(null);
   const waiting = platyIsTyping(messages, resetNote);
 
+  // Follow the newest bubble without scrolling the page; a long one reads from its first line.
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
+    const el = log.current;
+    if (!el) return;
+    const last = el.querySelector<HTMLElement>(".bubble:last-of-type");
+    el.scrollTop = chatScrollTop(el, last);
   }, [messages, waiting]);
 
   const send = (text: string) => {
@@ -35,7 +40,7 @@ export function Chat({ messages, resetNote, disabled, hold, inputRef, onSay }: P
 
   return (
     <section className="card chat" aria-label="Chat with Platy">
-      <div className="chat__log" role="log" aria-live="polite">
+      <div className="chat__log" role="log" aria-live="polite" ref={log}>
         {messages.map((m, i) => (
           <div
             key={m.id}
@@ -51,7 +56,6 @@ export function Chat({ messages, resetNote, disabled, hold, inputRef, onSay }: P
             <span />
           </div>
         )}
-        <div ref={end} />
       </div>
 
       <form

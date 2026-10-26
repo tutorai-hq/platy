@@ -36,7 +36,7 @@ export function LineEntry({ id, prompt, placeholder, button, onSubmit, busy, aut
         onChange={setDraft}
         onSubmit={submit}
       />
-      <div className="problem__actions">
+      <div className="problem__actions dock-bottom">
         <button
           type="button"
           className="btn btn--primary"

@@ -9,6 +9,7 @@ import { PuzzlePlayer } from "./components/PuzzlePlayer";
 import { StepSolver } from "./components/StepSolver";
 import { TestRunner } from "./components/TestRunner";
 import { YourMap } from "./components/YourMap";
+import { latestTutorLine, TutorLine } from "./session/tutorLine";
 import { useTutorSession } from "./session/useTutorSession";
 import { usesMock } from "./transport";
 import type { DemoTrigger } from "./transport/types";
@@ -36,6 +37,8 @@ export function App() {
           <Mascot size={40} />
           <span className="brand__name">Platy</span>
         </div>
+        {/* The demo menu sits in the header, off the content (R-27): it covered buttons there. */}
+        {phase === "live" && s.isMock && <DemoControls onTrigger={s.demo} primerView={primerView} onPrimerView={setPrimerView} />}
         {phase === "live" && (
           <button type="button" className="btn btn--quiet btn--small" onClick={s.end}>
             End session
@@ -76,57 +79,58 @@ export function App() {
           )}
 
           {phase === "live" && (
-            <main className={`session${showPrimer ? " session--primer" : ""}`}>
-              {s.state.puzzle ? (
-                <PuzzlePlayer
-                  key={s.state.puzzle.puzzle.instance_id}
-                  state={s.state.puzzle}
-                  moving={s.state.moving}
-                  onSolved={focusChat}
-                  onMove={s.puzzleMove}
-                  onHint={s.puzzleHint}
-                  onNext={s.puzzleNext}
-                  onColors={s.pickColors}
+            <TutorLine.Provider value={latestTutorLine(s.state.messages)}>
+              <main className={`session${showPrimer ? " session--primer" : ""}`}>
+                {s.state.puzzle ? (
+                  <PuzzlePlayer
+                    key={s.state.puzzle.puzzle.instance_id}
+                    state={s.state.puzzle}
+                    moving={s.state.moving}
+                    onSolved={focusChat}
+                    onMove={s.puzzleMove}
+                    onHint={s.puzzleHint}
+                    onNext={s.puzzleNext}
+                    onColors={s.pickColors}
+                  />
+                ) : s.state.problem && s.state.steps?.problem_id === s.state.problem.problem_id ? (
+                  <StepSolver
+                    key={s.state.problem.problem_id}
+                    problem={s.state.problem}
+                    steps={s.state.steps}
+                    onStep={s.step}
+                    onHint={s.hint}
+                    nextUp={s.state.nextUp}
+                    onNext={s.next}
+                  />
+                ) : (
+                  <ProblemCard
+                    problem={s.state.problem}
+                    feedback={s.state.feedback}
+                    onAnswer={s.answer}
+                    onHint={s.hint}
+                    note={s.state.resetNote}
+                    nextUp={s.state.nextUp}
+                    onNext={s.next}
+                  />
+                )}
+                <Chat
+                  messages={s.state.messages}
+                  resetNote={s.state.resetNote}
+                  disabled={s.state.overlay !== null}
+                  hold={
+                    s.state.moving ||
+                    (s.state.puzzle !== null && s.state.puzzle.pending !== null) ||
+                    (s.state.steps !== null && s.state.steps.pending !== null)
+                  }
+                  inputRef={chatInput}
+                  onSay={s.say}
                 />
-              ) : s.state.problem && s.state.steps?.problem_id === s.state.problem.problem_id ? (
-                <StepSolver
-                  key={s.state.problem.problem_id}
-                  problem={s.state.problem}
-                  steps={s.state.steps}
-                  onStep={s.step}
-                  onHint={s.hint}
-                  nextUp={s.state.nextUp}
-                  onNext={s.next}
-                />
-              ) : (
-                <ProblemCard
-                  problem={s.state.problem}
-                  feedback={s.state.feedback}
-                  onAnswer={s.answer}
-                  onHint={s.hint}
-                  note={s.state.resetNote}
-                  nextUp={s.state.nextUp}
-                  onNext={s.next}
-                />
-              )}
-              <Chat
-                messages={s.state.messages}
-                resetNote={s.state.resetNote}
-                disabled={s.state.overlay !== null}
-                hold={
-                  s.state.moving ||
-                  (s.state.puzzle !== null && s.state.puzzle.pending !== null) ||
-                  (s.state.steps !== null && s.state.steps.pending !== null)
-                }
-                inputRef={chatInput}
-                onSay={s.say}
-              />
-              {showPrimer && <PrimerPanel primer={s.state.primer} />}
-              {s.state.overlay && (
-                <OverlayPanel overlay={s.state.overlay} onResume={s.resume} onBreak={s.takeBreak} onClose={s.closeOverlay} />
-              )}
-              {s.isMock && <DemoControls onTrigger={s.demo} primerView={primerView} onPrimerView={setPrimerView} />}
-            </main>
+                {showPrimer && <PrimerPanel primer={s.state.primer} />}
+                {s.state.overlay && (
+                  <OverlayPanel overlay={s.state.overlay} onResume={s.resume} onBreak={s.takeBreak} onClose={s.closeOverlay} />
+                )}
+              </main>
+            </TutorLine.Provider>
           )}
 
           {phase === "ended" && !test && s.state.map && (

@@ -110,6 +110,11 @@ button, input { font: inherit; color: inherit; }
 .problem__prompt .katex-display { margin: 0; }
 .problem--solved .problem__prompt { background: var(--good-wash); }
 .problem__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+/* The card scrolls when the work gets long; its buttons stay in view at its bottom (R-27). */
+.session .dock-bottom {
+  position: sticky; bottom: -28px; z-index: 1; margin: 0 -28px -28px; padding: 12px 28px 28px;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0%), var(--card) 12px);
+}
 .problem__feedback { min-height: 1.5em; font-weight: 700; }
 /* The way on to a detour the server has ready (R-01): one big button where the answer buttons were. */
 .next-up { display: flex; }
@@ -129,6 +134,7 @@ button, input { font: inherit; color: inherit; }
 
 /* Keypad (R-18): letters and brackets on the left, a calculator pad on the right. */
 .keypad { display: grid; grid-template-columns: 3fr 5fr; gap: 12px; max-width: 500px; }
+.keypad-dock__tutor { display: none; }
 .keypad__block { display: grid; gap: 6px; }
 .keypad__block--symbols { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .keypad__block--numbers { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -212,13 +218,16 @@ button, input { font: inherit; color: inherit; }
 }
 .resources__note { font-size: 0.85rem; color: var(--ink-soft); }
 
-/* Demo controls (mock only) */
-.demo { position: fixed; left: 16px; bottom: 16px; z-index: 20; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+/* Demo controls (mock only), in the header so they never cover the content. */
+.demo { position: relative; z-index: 20; margin-left: auto; margin-right: 12px; }
 .demo__toggle {
   border: 1px dashed var(--ink-soft); background: var(--card); color: var(--ink-soft);
   border-radius: 999px; padding: 6px 14px; font-size: 0.8rem; cursor: pointer;
 }
-.demo__menu { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; }
+.demo__menu {
+  position: absolute; top: calc(100% + 8px); right: 0; width: max-content;
+  background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column;
+}
 .demo__menu button { border: 0; background: none; text-align: left; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
 .demo__menu button:hover { background: var(--paper); }
 
@@ -233,19 +242,28 @@ button, input { font: inherit; color: inherit; }
   .math-input { gap: 8px; }
   .math-input__field { min-height: 48px; }
   /* Docked like a keyboard while the box has focus (MathInput). Below overlays, above the chat. */
-  .keypad { display: none; }
-  .math-input--focused .keypad {
-    display: grid; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-    max-width: none; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  .keypad-dock { display: none; }
+  .math-input--focused .keypad-dock {
+    display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     background: var(--card); box-shadow: 0 -6px 20px rgb(23 49 58 / 10%);
   }
+  .math-input--focused .keypad { max-width: none; gap: 8px; }
+  /* Platy's newest line, above the keys, since the keypad covers the chat (R-27). */
+  .keypad-dock__tutor {
+    display: block; max-height: 22dvh; overflow-y: auto; margin-bottom: 10px; padding: 10px 14px;
+    border-radius: 14px; background: var(--paper); font-size: 0.95rem; line-height: 1.4;
+  }
+  .session .dock-bottom { bottom: -16px; margin: 0 -16px -16px; padding: 10px 16px 16px; }
+  /* The menu spans the screen under the header instead of hanging off the Demo chip's edge. */
+  .topbar { position: relative; }
+  .demo { position: static; }
+  .demo__menu { top: calc(100% - 4px); left: 12px; right: 12px; width: auto; z-index: 20; }
   .keypad__block { gap: 4px; }
   .keypad__key { min-height: 42px; }
   .math-preview { min-height: 1.6em; }
   .problem__actions { flex-wrap: nowrap; }
   .problem__actions .btn { flex: 1; padding: 10px 12px; font-size: 0.95rem; }
-  .demo { top: 12px; bottom: auto; left: 50%; transform: translateX(-50%); }
-  .demo__menu { order: 1; }
   .chat { min-height: 0; }
   .chat__log { padding: 14px; }
   .chat__composer { padding: 10px; gap: 8px; }

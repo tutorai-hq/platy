@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { KEYPAD, press, type Key } from "../math/keypad";
 import { childMathToLatex } from "../math/latex";
-import { Tex } from "../math/MathText";
+import { MathText, Tex } from "../math/MathText";
+import { TutorLine } from "../session/tutorLine";
 
 interface Props {
   id: string;
@@ -30,6 +31,7 @@ export function MathInput({ id, label, value, placeholder, onChange, onSubmit, d
     if (disabled) setFocused(false);
   }, [disabled]);
   const latex = childMathToLatex(value);
+  const tutorLine = useContext(TutorLine);
 
   const tap = (key: Key) => {
     const el = input.current;
@@ -102,27 +104,37 @@ export function MathInput({ id, label, value, placeholder, onChange, onSubmit, d
           </>
         )}
       </p>
-      {/* Out of the Tab order: a keyboard types all of this directly, and 28 stops between the
-          box and its Check button would be a slog. Screen readers still reach every key. */}
-      <div className="keypad" role="group" aria-label="Math keypad">
-        {(["symbols", "numbers"] as const).map((block) => (
-          <div key={block} className={`keypad__block keypad__block--${block}`}>
-            {KEYPAD[block].map((k) => (
-              <button
-                key={k.label}
-                type="button"
-                tabIndex={-1}
-                className={`keypad__key keypad__key--${k.action.kind}${k.tone ? ` keypad__key--${k.tone}` : ""}`}
-                aria-label={k.aria}
-                disabled={disabled}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => tap(k)}
-              >
-                {k.label}
-              </button>
-            ))}
+      <div className="keypad-dock">
+        {/* On a phone the docked keypad covers the chat, so Platy's newest line sits above it (R-27).
+            The chat log already reads it out, so screen readers skip this copy. A tap here leaves
+            the box, which puts the keypad away and shows the whole chat. */}
+        {tutorLine && (
+          <div className="keypad-dock__tutor" aria-hidden="true">
+            <MathText text={tutorLine} />
           </div>
-        ))}
+        )}
+        {/* Out of the Tab order: a keyboard types all of this directly, and 28 stops between the
+            box and its Check button would be a slog. Screen readers still reach every key. */}
+        <div className="keypad" role="group" aria-label="Math keypad">
+          {(["symbols", "numbers"] as const).map((block) => (
+            <div key={block} className={`keypad__block keypad__block--${block}`}>
+              {KEYPAD[block].map((k) => (
+                <button
+                  key={k.label}
+                  type="button"
+                  tabIndex={-1}
+                  className={`keypad__key keypad__key--${k.action.kind}${k.tone ? ` keypad__key--${k.tone}` : ""}`}
+                  aria-label={k.aria}
+                  disabled={disabled}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => tap(k)}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

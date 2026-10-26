@@ -59,7 +59,9 @@ by" screen, which holds until you reload the page.
    it docks at the bottom like a keyboard while the box has focus, and the phone's own keyboard
    stays down. **abc** brings that keyboard back for letters and words, and **↵** checks the
    answer. On a laptop the keypad stays under the box; its keys are out of the Tab order because
-   a keyboard types everything directly.
+   a keyboard types everything directly. The docked keypad covers the chat, so Platy's newest
+   line sits in a strip above the keys (R-27). When the work gets long, the card scrolls and its
+   buttons stay pinned at its bottom, and the chat starts a long reply at its first line.
 
 8. **Puzzles (R-37).** On problem 3, answer `25/3` (adding the 5 instead of subtracting it).
    Platy sends you to a spot-the-error puzzle about the same slip, then back to problem 3.
@@ -97,7 +99,7 @@ by" screen, which holds until you reload the page.
    student sits the same two tests. Nothing is kept: the adult running the session writes the
    score down. Only shown on the scripted mock for now.
 
-The dashed **Demo** button (mock only) jumps to any screen on cue: skip a problem, each of the
+The dashed **Demo** button in the header (mock only) jumps to any screen on cue: skip a problem, each of the
 three puzzles (spot the error, missing step, balance scale), the worked example, the pause screen, the
 safety-resources panel (R-22) and the dropped-connection screen (P-3). **Switch interest**
 re-skins the puzzle on screen (soccer, football, gaming, plain) without changing its numbers,
