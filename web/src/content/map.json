@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "about": "Fixed words for the end-of-session map (R-13). The line is picked from what happened (problems solved, first tries), about effort, never about being smart.",
+  "about": "Fixed words for the end-of-session map (R-13). The encouragement is picked from what happened (problems solved, first tries), about effort, never about being smart. Every state the map draws has its words here, so the legend and the boxes always agree.",
   "encouragement": {
     "none": "Showing up is the hard part, and you did it. Next time, these start to move.",
     "practiced": "You practiced {skills} today.",
@@ -9,5 +9,25 @@
     "kept_going": "Some of these were hard, and you kept going. You practiced {skills} today.",
     "skills_one": "1 skill",
     "skills": "{n} skills"
-  }
+  },
+  "states": {
+    "mastered": "Mastered",
+    "unlocked_today": "Unlocked today",
+    "next": "Next to unlock",
+    "due": "Practice again soon",
+    "learning": "Practiced today",
+    "open": "Ready to start",
+    "locked": "Not open yet"
+  },
+  "badge": {
+    "gain": "+{n}% today",
+    "gain_label": "Up {n} points today",
+    "practiced": "Practiced today"
+  },
+  "solved": {
+    "one": "You solved 1 problem today.",
+    "many": "You solved {n} problems today."
+  },
+  "today": "Today",
+  "whole_map": "See the whole map"
 }

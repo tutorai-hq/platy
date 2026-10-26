@@ -40,7 +40,7 @@ export const EDGES: readonly { from: string; to: string }[] = NODES.flatMap((n) 
 
 /** A skill's box, and the grid it sits on: one column per layer, rows with a gap between them. */
 export const W = 164;
-export const H = 60;
+export const H = 72;
 const GAP_X = 36;
 const GAP_Y = 18;
 const COL = W + GAP_X;
@@ -111,6 +111,11 @@ export type NodeState =
   | "open"
   | "locked";
 
+/** Every state the map draws, in legend order. The legend is built from this list, so a new state can't miss it. */
+export const STATES: readonly NodeState[] = ["learning", "mastered", "unlocked_today", "next", "due", "open", "locked"];
+/** The words for each state, on the boxes, in the legend and in the phone's list. */
+export const STATE_WORDS: Record<NodeState, string> = words.states;
+
 export interface NodeView {
   state: NodeState;
   before: number;
@@ -147,6 +152,14 @@ export function mapStates(report: readonly SkillReport[]): Map<string, NodeView>
     views.set(n.id, { state, before: before(n.id), after: after(n.id), moved: moved(n.id) });
   }
   return views;
+}
+
+/** Today's skills, for the phone's list: anything that moved, or that today changed for. */
+export function todayNodes(views: Map<string, NodeView>): MapNode[] {
+  return NODES.filter((n) => {
+    const v = views.get(n.id)!;
+    return v.moved || v.state === "unlocked_today" || v.state === "next" || v.state === "due";
+  });
 }
 
 /**

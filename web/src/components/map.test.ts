@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
-import { EDGES, edgeRoute, encouragement, H, LAYOUT, mapStates, NODES, W } from "../content/map";
+import { EDGES, edgeRoute, encouragement, H, LAYOUT, mapStates, NODES, type NodeState, STATE_WORDS, STATES, W } from "../content/map";
 import type { SkillReport } from "../protocol";
 import { initialState, reducer } from "../session/state";
 import { YourMap } from "./YourMap";
@@ -124,6 +124,47 @@ describe("Your map (R-13)", () => {
     expect(encouragement(one, 5, 1)).toBe("Some of these were hard, and you kept going. You practiced 1 skill today.");
     // A server that doesn't count first tries gets the plain line.
     expect(encouragement(one)).toBe("You practiced 1 skill today.");
+  });
+
+  describe("a map a teen can read (teen test 2026-10-26)", () => {
+    // The demo arc: two-step up 17 points, a probe down the path, order of operations due.
+    const arc = report({ ...BASE, two_step_equations: 0.57, one_step_equations: 0.31, inverse_operations: 0.41 }, BASE, ["order_of_operations"]);
+
+    it("explains every look it draws in the legend, from the same state list", () => {
+      const html = render(arc);
+      const drawn = new Set(attrs(html, "data-state"));
+      const keys = attrs(html, "data-key");
+      expect(new Set(keys)).toEqual(drawn);
+      expect(keys).toHaveLength(drawn.size);
+      for (const k of keys) expect(html).toContain(`>${STATE_WORDS[k as NodeState]}<`);
+      for (const s of STATES) expect(STATE_WORDS[s], s).toBeTruthy();
+    });
+
+    it("says what a change badge means, in words and for a screen reader", () => {
+      const html = render(arc);
+      expect(html).toMatch(/<text class="map-node__delta"[^>]*aria-label="Up 17 points today"[^>]*>\+17% today<\/text>/);
+    });
+
+    it("calls a skill to review 'Practice again soon', not 'Review soon'", () => {
+      const html = render(arc);
+      expect(html).toContain("Practice again soon");
+      expect(html).not.toContain("Review soon");
+    });
+
+    it("hides the solved count at zero, and never contradicts the encouragement", () => {
+      expect(render(arc)).not.toContain("You solved");
+      const html = renderToStaticMarkup(createElement(YourMap, { report: arc, solved: 1, firstTry: 1 }));
+      expect(html).toContain("You solved 1 problem today.");
+      expect(html).toContain("Every problem right on the first try.");
+    });
+
+    it("lists today's skills first for a phone, with the whole map behind a button", () => {
+      const html = render(arc);
+      const today = attrs(html, "data-today");
+      expect(today).toEqual(expect.arrayContaining(["two_step_equations", "one_step_equations", "inverse_operations", "order_of_operations", "multi_step_equations"]));
+      expect(today).not.toContain("linear_equation_word_problems");
+      expect(html).toContain("See the whole map");
+    });
   });
 
   it("keeps the map in memory for the end screen only, and drops it at the next start", () => {

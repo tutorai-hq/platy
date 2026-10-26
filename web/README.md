@@ -93,12 +93,16 @@ by" screen, which holds until you reload the page.
    drawn from `skill_map.json`. Today's skills fill in one by one, foundations first, then the next
    skill gets its moment: "Unlocked today" when today's work opened it (solve `2x + 5 = 17`
    cleanly, then end the session: multi-step equations unlocks), or "Next to unlock" when it's one
-   step away. Skills due for review are marked, and one line of encouragement about effort comes
-   from `src/content/map.json`. Long prerequisite lines run along the gaps between rows, so no line
-   passes under a box. On a phone the map scrolls sideways, starting at today's work but far enough
-   along to show the next skill. Nothing is saved; the next session starts without it.
-12. **Pre-test and post-test (R-26).** On the welcome screen or an end screen, under "Running a test session?",
-   **Start the pre-test** or **Start the post-test**. Each is 10 questions, two per demo skill at
+   step away. Skills due for review are marked "Practice again soon" (teal, not a mark against
+   the student), a practiced skill's badge says "+17% today", and the legend lists every look on
+   screen, built from the same state list as the boxes. Every word comes from `src/content/map.json`,
+   and the one line of encouragement is picked from what happened (problems solved, first tries).
+   Long prerequisite lines run along the gaps between rows, so no line passes under a box. On a
+   phone today's skills come first as a list, and **See the whole map** opens the map, which scrolls
+   sideways from today's work. Nothing is saved; the next session starts without it.
+12. **Pre-test and post-test (R-26).** For the adult running a test session, behind the dashed
+   **Demo** button: **Start the pre-test** on the welcome screen, **Start the post-test** on an end
+   screen (teen testers took the buttons for part of the lesson). Each is 10 questions, two per demo skill at
    level 2, one at a time, with no hints and no feedback, then a score in total and per skill.
    The post form asks the same kind of question as the pre form in each slot, with new numbers of
    the same size, and never repeats one. Both forms are fixed (`src/mock/pretest.ts`), so every

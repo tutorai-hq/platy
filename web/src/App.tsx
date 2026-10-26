@@ -37,8 +37,21 @@ export function App() {
           <Mascot size={40} />
           <span className="brand__name">Platy</span>
         </div>
-        {/* The demo menu sits in the header, off the content (R-27): it covered buttons there. */}
-        {phase === "live" && s.isMock && <DemoControls onTrigger={s.demo} primerView={primerView} onPrimerView={setPrimerView} />}
+        {/* The demo menu sits in the header, off the content (R-27): it covered buttons there. Off
+            the session it holds the test-session entries (R-26), for the adult running it. */}
+        {age === "ok" && usesMock() && (phase === "live" || !test) && (
+          <DemoControls
+            live={phase === "live"}
+            onTrigger={s.demo}
+            primerView={primerView}
+            onPrimerView={setPrimerView}
+            extra={
+              phase === "welcome" ? [{ label: "Start the pre-test", run: () => setTest("pre") }]
+              : phase === "ended" ? [{ label: "Start the post-test", run: () => setTest("post") }]
+              : []
+            }
+          />
+        )}
         {phase === "live" && (
           <button type="button" className="btn btn--quiet btn--small" onClick={s.end}>
             End session
@@ -74,7 +87,6 @@ export function App() {
               <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                 Start practice
               </button>
-              <TestStart onStart={setTest} />
             </Screen>
           )}
 
@@ -137,14 +149,10 @@ export function App() {
             <main className="screen screen--map">
               <div className="screen__inner">
                 <h1>Your map</h1>
-                <p>
-                  You solved {s.state.solved} {s.state.solved === 1 ? "problem" : "problems"} today.
-                </p>
                 <YourMap report={s.state.map} solved={s.state.solved} firstTry={s.state.firstTry} />
                 <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                   Practice again
                 </button>
-                <TestStart onStart={setTest} />
               </div>
             </main>
           )}
@@ -157,7 +165,6 @@ export function App() {
               <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                 Practice again
               </button>
-              <TestStart onStart={setTest} />
             </Screen>
           )}
 
@@ -176,23 +183,6 @@ export function App() {
   );
 }
 
-// For a test session (R-26): the pre-test before practice and the post-test after it. Scripted mock
-// only for now.
-function TestStart({ onStart }: { onStart: (form: "pre" | "post") => void }) {
-  if (!usesMock()) return null;
-  return (
-    <div className="test-start">
-      <p>Running a test session?</p>
-      <button type="button" className="btn btn--quiet btn--small" onClick={() => onStart("pre")}>
-        Start the pre-test
-      </button>
-      <button type="button" className="btn btn--quiet btn--small" onClick={() => onStart("post")}>
-        Start the post-test
-      </button>
-    </div>
-  );
-}
-
 function Screen({ title, mascot, children }: { title: string; mascot: "calm" | "happy"; children: React.ReactNode }) {
   return (
     <main className="screen">
@@ -205,15 +195,20 @@ function Screen({ title, mascot, children }: { title: string; mascot: "calm" | "
   );
 }
 
-// Only shown with the scripted mock, so a demo can reach every screen on cue.
+// Only shown with the scripted mock, so a demo can reach every screen on cue. `extra` holds the
+// entries for the screen it's on, such as the test session's (R-26); `live` adds the session's.
 function DemoControls({
+  live,
   onTrigger,
   primerView,
   onPrimerView,
+  extra = [],
 }: {
+  live: boolean;
   onTrigger: (t: DemoTrigger) => void;
   primerView: boolean;
   onPrimerView: (on: boolean) => void;
+  extra?: { label: string; run: () => void }[];
 }) {
   const [open, setOpen] = useState(false);
   const items: [DemoTrigger, string][] = [
@@ -231,6 +226,20 @@ function DemoControls({
     <div className="demo">
       {open && (
         <div className="demo__menu" role="menu">
+          {extra.map(({ label, run }) => (
+            <button
+              key={label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                run();
+                setOpen(false);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          {live && (
           <button
             type="button"
             role="menuitemcheckbox"
@@ -242,7 +251,8 @@ function DemoControls({
           >
             {primerView ? "Hide what Platy is thinking" : "Show what Platy is thinking"}
           </button>
-          {items.map(([t, label]) => (
+          )}
+          {live && items.map(([t, label]) => (
             <button
               key={t}
               type="button"
