@@ -38,8 +38,9 @@ by" screen, which holds until you reload the page.
    algebra moves: a term that crosses the equals sign flies over and flips its sign
    (`2x = 12`), a divisor goes across as `÷ 2` (`x = 6`), a move written out on both sides drops in
    (`3x - 4 + 4 = 11 + 4`), and worked-out terms fade together (`3x = 15`). A wrong line
-   (`2x = 22`) stays on screen, marked, with your text left in the box to fix, and Platy asks what
-   you did to each side instead of giving the line (R-02, R-03). When the wrong line is a known
+   (`2x = 22`) stays on screen, marked, with your text left in the box to fix. The first wrong
+   line starts the primer's probing (item 10); after that, Platy asks what you did to each side
+   instead of giving the line (R-02, R-03). When the wrong line is a known
    slip (R-40, `src/content/slips.json`), a short hint names the mistake under it: `2x = 22`
    says the number was moved without being undone. On line 2, `x = 10` (from `2x = 12`) is caught
    as a one-step slip, the skill one level down. Skipping ahead (`x = 6` straight
@@ -70,6 +71,15 @@ by" screen, which holds until you reload the page.
    works (R-03). **Keep going** brings a new problem with the last step left for you, then one
    where you write both. In the real app the primer would pick how many steps to leave from the
    student's mastery; the mock just goes through all three in order, then back to the lesson.
+
+10. **The demo arc and "what Platy is thinking" (R-01, R-42).** Open **Demo → Show what Platy is
+   thinking**: a dark panel beside the chat shows mastery per skill on the path, the primer's
+   hypothesis, and a reason for each move, newest first (laptops only). Then on `2x + 5 = 17`:
+   write `2x = 99`, and Platy probes one level down (`x - 8 = -3`, answer `-11`), then one more
+   (`x - 4 + b = x`, answer `-4`). That's the gap: a worked example teaches it, three fades
+   (**Demo → Skip** moves through them). Back on `2x + 5 = 17`, write `2x = 22`: a repair puzzle
+   on that one move, then a fresh generated problem confirms the fix. A right answer on a probe
+   ends the probing early and goes back to the problem.
 
 The dashed **Demo** button (mock only) jumps to any screen on cue: skip a problem, each of the
 three puzzles (spot the error, missing step, balance scale), the worked example, the pause screen, the
@@ -142,7 +152,17 @@ Generated problems (R-41): `src/mock/generate.ts` makes problems for the five de
 levels (1 small positive whole numbers, 2 negatives or bigger numbers, 3 a fraction or decimal
 answer or an extra step). They're seeded, never repeat within a session, are checked before
 they're returned, and carry the wrong answers their slips lead to. The scripted lesson doesn't
-use them yet. The real generators belong on the server (`docs/proposals/generators-python.md`).
+use them only for repair puzzles and the fresh problem after one. The real generators belong on the
+server (`docs/proposals/generators-python.md`).
+
+The primer view (R-42, proposed for Connor to accept) adds `primer_state {mastery, hypothesis,
+move}` from the server, sent after each of the primer's moves to a demo session only. It carries
+codes and numbers only: `mastery` is `[{skill_id, p}]` on the current path, `hypothesis` is
+`{code, skill_id}` or null, and `move` is `{code, reason, skill_id}`. The browser turns each code
+into words from `src/content/primer.json` and shows nothing for a code it doesn't know, so no free
+text from the server and nothing the student wrote reaches the panel. In the mock,
+`src/mock/primer.ts` stands in for the primer with a small BKT update; the real numbers come from
+Connor's policy and pyBKT mastery (A-5).
 
 `answer_result`, `instruction`/`position`/`total` on `problem`, and `resume` are additions to the
 plan's first draft; they let the problem card give feedback and show progress. Answers are sent

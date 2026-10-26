@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BalancePuzzle, Puzzle } from "../content/types";
 import { SKINS } from "../mock/puzzles";
-import type { StepResult } from "../protocol";
+import type { PrimerState, ServerEvent, StepResult } from "../protocol";
 import { initialState, reducer, type SessionState } from "./state";
 
 const live = (): SessionState => reducer(initialState, { type: "started" });
@@ -190,6 +190,38 @@ describe("session reducer", () => {
     it("drops the lines on a reset", () => {
       const s = result(reducer(at(), { type: "step_sent", text: "2x = 12" }), 1, "valid");
       expect(reducer(s, { type: "server", event: { type: "reset", reason: "problem_end" } }).steps).toBeNull();
+    });
+  });
+
+  // R-42: the demo primer view. Codes and numbers only, kept across resets, gone with the session.
+  describe("primer view (R-42)", () => {
+    const primer = (code: string, reason: string, p = 0.4): ServerEvent => ({
+      type: "primer_state",
+      mastery: [{ skill_id: "two_step_equations", p }],
+      hypothesis: { code: "suspects_gap", skill_id: "one_step_equations" },
+      move: { code, reason, skill_id: "one_step_equations" },
+    });
+
+    it("holds the latest primer state, counts each one, and logs the latest moves newest first", () => {
+      let s = live();
+      expect(s.primer).toBeNull();
+      s = reducer(s, { type: "server", event: primer("probe", "probe_prerequisite") });
+      s = reducer(s, { type: "server", event: primer("teach", "gap_found", 0.3) });
+      const { type: _type, ...latest } = primer("teach", "gap_found", 0.3) as { type: "primer_state" } & PrimerState;
+      expect(s.primer?.state).toEqual(latest);
+      expect(s.primer?.seq).toBe(2);
+      expect(s.primer?.log.map((l) => [l.seq, l.move.code])).toEqual([[2, "teach"], [1, "probe"]]);
+      for (let i = 0; i < 6; i++) s = reducer(s, { type: "server", event: primer("probe", "probe_deeper") });
+      expect(s.primer?.log).toHaveLength(3);
+    });
+
+    it("keeps the primer view through a hard reset, and drops it when the session ends or errors", () => {
+      let s = reducer(live(), { type: "server", event: primer("probe", "probe_prerequisite") });
+      s = reducer(s, { type: "server", event: { type: "reset", reason: "problem_end" } });
+      expect(s.primer?.seq).toBe(1);
+      expect(reducer(s, { type: "server", event: { type: "session_end", solved: 1 } }).primer).toBeNull();
+      expect(reducer(s, { type: "server", event: { type: "error", code: "socket_closed" } }).primer).toBeNull();
+      expect(reducer(s, { type: "started" }).primer).toBeNull();
     });
   });
 });

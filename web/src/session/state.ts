@@ -1,7 +1,7 @@
 import { applyMove } from "../content/balance";
 import { balanceStage, missingStage, type Outcomes, spotStage, workedStage } from "../content/progress";
 import type { CheckId, CheckOutcome, Pans, Puzzle, PuzzleMove } from "../content/types";
-import type { Problem, SafetyResource, ServerEvent, StepResult } from "../protocol";
+import type { PrimerState, Problem, SafetyResource, ServerEvent, StepResult } from "../protocol";
 
 // Everything here lives in React state only. Child content is never written to browser
 // storage, cookies, the URL or a log (P-1, P-10), and it is dropped on a reset or when
@@ -69,7 +69,22 @@ export interface SessionState {
   moving: boolean;
   errorCode: string | null;
   solved: number;
+  /**
+   * The demo primer view (R-42): codes and numbers only, never chat. It outlasts resets, since
+   * it's the primer's view of the session, and goes when the session ends.
+   */
+  primer: PrimerView | null;
 }
+
+export interface PrimerView {
+  state: PrimerState;
+  /** Counts primer_state events, so the panel can mark each new move. */
+  seq: number;
+  /** The latest moves, newest first, for the reason lines. */
+  log: { seq: number; move: PrimerState["move"] }[];
+}
+
+const PRIMER_LOG = 3;
 
 export const initialState: SessionState = {
   phase: "welcome",
@@ -83,6 +98,7 @@ export const initialState: SessionState = {
   moving: false,
   errorCode: null,
   solved: 0,
+  primer: null,
 };
 
 export type Action =
@@ -199,6 +215,12 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
       return { ...state, overlay: { kind: "pause" } };
     case "safety_escalation":
       return { ...state, overlay: { kind: "safety", resources: event.resources } };
+    case "primer_state": {
+      const { type: _type, ...primer } = event;
+      const seq = (state.primer?.seq ?? 0) + 1;
+      const log = [{ seq, move: primer.move }, ...(state.primer?.log ?? [])].slice(0, PRIMER_LOG);
+      return { ...state, primer: { state: primer, seq, log } };
+    }
     case "error":
       return { ...initialState, phase: "error", errorCode: event.code };
     case "session_end":

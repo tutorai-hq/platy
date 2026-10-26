@@ -3,6 +3,7 @@ import { AgeCheck } from "./components/AgeCheck";
 import { Chat } from "./components/Chat";
 import { Mascot } from "./components/Mascot";
 import { OverlayPanel } from "./components/Overlays";
+import { PrimerPanel } from "./components/PrimerPanel";
 import { ProblemCard } from "./components/ProblemCard";
 import { PuzzlePlayer } from "./components/PuzzlePlayer";
 import { StepSolver } from "./components/StepSolver";
@@ -18,6 +19,10 @@ export function App() {
   // The age check comes first (R-36), and only its yes/no is kept, in memory (P-15). A "no" holds
   // for the rest of the visit, so a different answer can't be tried straight away.
   const [age, setAge] = useState<"ask" | "ok" | "under">("ask");
+  // The demo flag for the primer view (R-42): off until the demo menu turns it on, and only with
+  // the scripted mock, so a real session never shows it.
+  const [primerView, setPrimerView] = useState(false);
+  const showPrimer = s.isMock && primerView;
 
   return (
     <div className="app">
@@ -59,7 +64,7 @@ export function App() {
           )}
 
           {phase === "live" && (
-            <main className="session">
+            <main className={`session${showPrimer ? " session--primer" : ""}`}>
               {s.state.puzzle ? (
                 <PuzzlePlayer
                   key={s.state.puzzle.puzzle.instance_id}
@@ -94,10 +99,11 @@ export function App() {
                 inputRef={chatInput}
                 onSay={s.say}
               />
+              {showPrimer && <PrimerPanel primer={s.state.primer} />}
               {s.state.overlay && (
                 <OverlayPanel overlay={s.state.overlay} onResume={s.resume} onBreak={s.takeBreak} onClose={s.closeOverlay} />
               )}
-              {s.isMock && <DemoControls onTrigger={s.demo} />}
+              {s.isMock && <DemoControls onTrigger={s.demo} primerView={primerView} onPrimerView={setPrimerView} />}
             </main>
           )}
 
@@ -140,7 +146,15 @@ function Screen({ title, mascot, children }: { title: string; mascot: "calm" | "
 }
 
 // Only shown with the scripted mock, so a demo can reach every screen on cue.
-function DemoControls({ onTrigger }: { onTrigger: (t: DemoTrigger) => void }) {
+function DemoControls({
+  onTrigger,
+  primerView,
+  onPrimerView,
+}: {
+  onTrigger: (t: DemoTrigger) => void;
+  primerView: boolean;
+  onPrimerView: (on: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
   const items: [DemoTrigger, string][] = [
     ["skip", "Skip to next problem"],
@@ -157,6 +171,17 @@ function DemoControls({ onTrigger }: { onTrigger: (t: DemoTrigger) => void }) {
     <div className="demo">
       {open && (
         <div className="demo__menu" role="menu">
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={primerView}
+            onClick={() => {
+              onPrimerView(!primerView);
+              setOpen(false);
+            }}
+          >
+            {primerView ? "Hide what Platy is thinking" : "Show what Platy is thinking"}
+          </button>
           {items.map(([t, label]) => (
             <button
               key={t}

@@ -29,6 +29,20 @@ export interface Problem {
   total: number;
 }
 
+/**
+ * What the primer believes and why, for the demo-only primer view (R-42). Codes and numbers only:
+ * the browser turns each code into words from a fixed table (content/primer.json), so no free
+ * text and nothing the student wrote ever reaches it. Proposed; Connor's policy would emit it.
+ */
+export interface PrimerState {
+  /** P(mastered) per skill node on the current path, 0 to 1, in path order. */
+  mastery: { skill_id: string; p: number }[];
+  /** The primer's working hypothesis, or null while it has none. */
+  hypothesis: { code: string; skill_id: string } | null;
+  /** The move it just made, the reason for it, and the skill the move is about. */
+  move: { code: string; reason: string; skill_id: string };
+}
+
 export interface SafetyResource {
   name: string;
   contact: string;
@@ -62,7 +76,9 @@ export type ServerEvent =
   | { type: "puzzle"; puzzle: Puzzle }
   /** The server's verdict on one move. "solved" arrives when a balance scale is finished. */
   | { type: "puzzle_result"; instance_id: string; check: CheckId; outcome: CheckOutcome }
-  | { type: "puzzle_done"; instance_id: string };
+  | { type: "puzzle_done"; instance_id: string }
+  /** The primer's state after each move (R-42). Sent only when the demo flag is on. */
+  | ({ type: "primer_state" } & PrimerState);
 
 export type ClientEvent =
   | { type: "child_message"; text: string }

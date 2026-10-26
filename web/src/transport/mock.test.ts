@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PuzzleMove } from "../content/types";
-import type { ClientEvent, ServerEvent } from "../protocol";
+import type { ClientEvent, PrimerState, ServerEvent } from "../protocol";
+import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { EXPLAIN_FIRST, LESSON, STEP_LESSON } from "../mock/script";
 import { MockTransport } from "./mock";
@@ -374,8 +375,18 @@ describe("MockTransport", () => {
 
   describe("step-by-step problems (R-39)", () => {
     const steps = () => harness(STEP_LESSON);
-    const results = (h: ReturnType<typeof harness>) =>
-      h.events.filter((e) => e.type === "step_result").map((e) => (e.type === "step_result" ? e.result : null));
+    const results = (h: ReturnType<typeof harness>, from = 0) =>
+      h.events.slice(from).filter((e) => e.type === "step_result").map((e) => (e.type === "step_result" ? e.result : null));
+    // The first miss on a two-step problem starts probing (R-01); passing the first probe leads
+    // straight back. The tests below start from there, with `from` marking the events after it.
+    const probed = async (seed?: number) => {
+      const h = harness(STEP_LESSON, seed);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "5" });
+      expect(h.problems()).toEqual(["s1", "one_step_equations.1", "s1"]);
+      return Object.assign(h, { from: h.events.length });
+    };
 
     it("opens the demo with step-by-step problems", async () => {
       const demo = new MockTransport(FAST);
@@ -404,21 +415,20 @@ describe("MockTransport", () => {
 
     // A wrong line that matches no slip, so no repair puzzle takes over (that's tested below).
     it("marks a wrong line, asks what happened, and never gives the next line (R-02, R-03)", async () => {
-      const h = steps();
-      await h.settle();
+      const h = await probed();
       const mark = h.events.length;
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
-      expect(results(h)).toEqual(["invalid"]);
+      expect(results(h, mark)).toEqual(["invalid"]);
       const reply = h.said(mark).join(" ");
+      expect(reply).toBe(STEP_LESSON[0]!.askWhy);
       expect(reply).not.toMatch(/2x = 12|x = 6/);
       // The wrong line isn't kept: the next try is still line 1, checked against the problem.
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
-      expect(results(h)).toEqual(["invalid", "valid"]);
+      expect(results(h, mark)).toEqual(["invalid", "valid"]);
     });
 
     it("forgets its question about a wrong line once the student fixes the line", async () => {
-      const h = steps();
-      await h.settle();
+      const h = await probed();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
       const mark = h.events.length;
@@ -427,21 +437,19 @@ describe("MockTransport", () => {
     });
 
     it("names the slip a wrong line matches, and none for a correct or unknown one (R-40)", async () => {
-      const h = steps();
-      await h.settle();
+      const h = await probed();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
       // Line 2: a one-step slip on a two-step problem, the gap one level down. Its repair item
       // isn't built yet, so the hint on the line is all that happens.
       await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 10" });
-      const slips = h.events.filter((e) => e.type === "step_result").map((e) => (e.type === "step_result" ? (e.slip ?? null) : null));
+      const slips = h.events.slice(h.from).filter((e) => e.type === "step_result").map((e) => (e.type === "step_result" ? (e.slip ?? null) : null));
       expect(slips).toEqual([null, null, "coefficient_subtracted"]);
       expect(h.events.some((e) => e.type === "puzzle")).toBe(false);
     });
 
     it("sends a slip on 2x + 5 = 17 to its repair puzzle, then confirms the fix on a fresh problem (R-37, R-41)", async () => {
-      const h = steps();
-      await h.settle();
+      const h = await probed();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
       expect(h.events.filter((e) => e.type === "step_result").at(-1)).toMatchObject({ slip: "constant_moved_without_undoing" });
       expect(h.events).toContainEqual({ type: "topic_switch", label: "Quick puzzle" });
@@ -466,15 +474,14 @@ describe("MockTransport", () => {
       const answer = (Number(cc) - (sign === "-" ? -1 : 1) * Number(cb)) / Number(ca);
       await h.send({ type: "step", problem_id: fresh.problem_id, line: 1, text: `x = ${answer}` });
       expect(results(h).at(-1)).toBe("solved");
-      expect(h.problems()).toEqual(["s1", fresh.problem_id, "s2"]);
+      expect(h.problems()).toEqual(["s1", "one_step_equations.1", "s1", fresh.problem_id, "s2"]);
     });
 
     // Seeds where the fresh problem once came out as s2 (4208) or as the repair puzzle (4144).
     it("never confirms the fix on a problem from the lesson or on the repair puzzle itself (R-41)", async () => {
       const lesson = STEP_LESSON.map((p) => p.prompt);
       for (const seed of [4208, 4144, 5786, 11628, ...Array.from({ length: 20 }, (_, i) => i + 1)]) {
-        const h = harness(STEP_LESSON, seed);
-        await h.settle();
+        const h = await probed(seed);
         await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
         const puzzle = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
         if (puzzle?.template !== "spot_the_error") throw new Error("expected the spot-the-error repair");
@@ -489,14 +496,13 @@ describe("MockTransport", () => {
     });
 
     it("still brings a fresh problem, not the slipped one, after a pause during the repair (R-02, R-21)", async () => {
-      const h = steps();
-      await h.settle();
+      const h = await probed();
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
       h.t.demo("pause");
       await h.settle();
       await h.send({ type: "resume" });
       await h.send({ type: "answer", problem_id: "warmup", text: "5" });
-      expect(h.problems()).toEqual(["s1", "warmup", "g1"]);
+      expect(h.problems()).toEqual(["s1", "one_step_equations.1", "s1", "warmup", "g1"]);
       const fresh = h.events.filter((e) => e.type === "problem").at(-1);
       expect(fresh).toMatchObject({ skill_id: "two_step_equations", format: "steps" });
     });
@@ -527,10 +533,120 @@ describe("MockTransport", () => {
     });
 
     it("suggests a pause after three wrong lines (R-21)", async () => {
-      const h = steps();
-      await h.settle();
+      const h = await probed();
       for (const text of ["2x = 99", "2x = 17", "x = 13"]) await h.send({ type: "step", problem_id: "s1", line: 1, text });
       expect(h.events.at(-1)).toEqual({ type: "pause_suggested" });
+    });
+  });
+
+  // R-42 with R-01: the demo arc the primer view narrates, in codes and numbers only.
+  describe("primer view (R-42)", () => {
+    const primerStates = (h: ReturnType<typeof harness>, from = 0) =>
+      h.events.slice(from).flatMap((e) => (e.type === "primer_state" ? [e as PrimerState] : []));
+    const moves = (h: ReturnType<typeof harness>, from = 0) =>
+      primerStates(h, from).map((s) => `${s.move.code}:${s.move.reason}:${s.move.skill_id}`);
+    const p = (s: PrimerState | undefined, skill: string) => s?.mastery.find((m) => m.skill_id === skill)?.p ?? NaN;
+
+    it("plays the demo arc: miss, probe two levels down, find the gap, teach it, repair a slip, confirm the fix", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      expect(moves(h)).toEqual(["pose_problem:path_start:two_step_equations"]);
+
+      // Miss 2x + 5 = 17 with no known slip: probe one-step equations first (R-01).
+      let mark = h.events.length;
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      expect(moves(h, mark)).toEqual([
+        "mark_line:line_invalid:two_step_equations",
+        "probe:probe_prerequisite:one_step_equations",
+      ]);
+      expect(primerStates(h).at(-1)?.hypothesis).toEqual({ code: "suspects_gap", skill_id: "one_step_equations" });
+      expect(h.problems()).toEqual(["s1", "one_step_equations.1"]);
+
+      // A miss there too: one level deeper, inverse operations.
+      mark = h.events.length;
+      const before = primerStates(h).at(-1);
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      expect(p(primerStates(h).at(-1), "one_step_equations")).toBeLessThan(p(before, "one_step_equations"));
+      expect(moves(h, mark)).toEqual(["probe:probe_deeper:inverse_operations"]);
+      expect(h.problems().at(-1)).toBe("inverse_operations.1");
+
+      // And there: that's the gap. Teach it with a worked example.
+      mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      expect(moves(h, mark)).toEqual(["teach:gap_found:inverse_operations"]);
+      expect(primerStates(h).at(-1)?.hypothesis).toEqual({ code: "gap_found", skill_id: "inverse_operations" });
+      expect(h.events.slice(mark).some((e) => e.type === "puzzle" && e.puzzle.template === "worked_example")).toBe(true);
+
+      // Through the fades, then back to the problem that showed the gap.
+      for (let i = 0; i < 3; i++) {
+        h.t.demo("skip");
+        await h.settle();
+      }
+      expect(moves(h).at(-1)).toBe("pose_problem:gap_taught:two_step_equations");
+      expect(h.problems().at(-1)).toBe("s1");
+
+      // A slip on one line: the repair puzzle, then a fresh problem to confirm the fix.
+      mark = h.events.length;
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      expect(moves(h, mark)).toEqual(["mark_line:slip_matched:two_step_equations", "repair:slip_repair:two_step_equations"]);
+      h.t.demo("skip");
+      await h.settle();
+      expect(moves(h).at(-1)).toBe("pose_problem:fix_check:two_step_equations");
+      const fresh = h.events.filter((e) => e.type === "problem").at(-1);
+      if (fresh?.type !== "problem") throw new Error("expected a problem");
+      const [, ca, sign, cb, cc] = /^(-?\d+)x ([+-]) (\d+) = (-?\d+)$/.exec(fresh.prompt) ?? [];
+      const answer = (Number(cc) - (sign === "-" ? -1 : 1) * Number(cb)) / Number(ca);
+      await h.send({ type: "step", problem_id: fresh.problem_id, line: 1, text: `x = ${answer}` });
+      expect(primerStates(h).at(-1)?.hypothesis).toEqual({ code: "fix_holding", skill_id: "two_step_equations" });
+    });
+
+    it("finds the gap one level down when the deeper probe passes", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      const mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "4" });
+      expect(moves(h, mark)).toEqual(["probe:probe_passed:inverse_operations", "teach:gap_found:one_step_equations"]);
+    });
+
+    it("goes back to the problem, with no stale hypothesis, when a probe is skipped or paused", async () => {
+      for (const leave of ["skip", "pause"] as const) {
+        const h = harness(STEP_LESSON);
+        await h.settle();
+        await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+        h.t.demo(leave);
+        await h.settle();
+        if (leave === "pause") {
+          await h.send({ type: "resume" });
+          await h.send({ type: "answer", problem_id: "warmup", text: "5" });
+        }
+        expect(h.problems().at(-1), leave).toBe("s1");
+        expect(primerStates(h).at(-1)?.hypothesis, leave).toBeNull();
+      }
+    });
+
+    it("sends only codes from the text table, known skills and numbers, never what the student wrote", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "child_message", text: "canary-7731 my name is Sam" });
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.send({ type: "child_message", text: "canary-7731 i hate this" });
+      await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      const states = primerStates(h);
+      expect(states.length).toBeGreaterThan(4);
+      for (const s of states) {
+        expect(JSON.stringify(s)).not.toMatch(/canary|Sam|2x = 99|-11/);
+        expect(PRIMER_CODES.moves).toContain(s.move.code);
+        expect(primerText("reasons", s.move.reason, s.move.skill_id), s.move.reason).not.toBeNull();
+        if (s.hypothesis) expect(primerText("hypotheses", s.hypothesis.code, s.hypothesis.skill_id)).not.toBeNull();
+        for (const m of s.mastery) {
+          expect(skillName(m.skill_id)).not.toBeNull();
+          expect(m.p).toBeGreaterThanOrEqual(0);
+          expect(m.p).toBeLessThanOrEqual(1);
+        }
+      }
     });
   });
 });

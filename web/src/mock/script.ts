@@ -3,6 +3,7 @@
 // short replies with one idea each (R-06), and a pivot when a child keeps missing (R-21).
 // Everything here is fake content; no real child data is involved (P-13).
 
+import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import type { PuzzleTemplate } from "../content/types";
 import type { SafetyResource } from "../protocol";
 
@@ -81,7 +82,7 @@ export const STEP_LESSON: ScriptedProblem[] = [
 export const LESSON: ScriptedProblem[] = [
   {
     problem_id: "p1",
-    skill_id: "alg1.linear.two_step",
+    skill_id: "two_step_equations",
     prompt: "3x + 5 = 20",
     instruction: "Solve for x",
     solutions: [5],
@@ -106,7 +107,7 @@ export const LESSON: ScriptedProblem[] = [
   },
   {
     problem_id: "p2",
-    skill_id: "alg1.linear.distributive",
+    skill_id: "distributive_property",
     prompt: "2(x - 3) = 10",
     instruction: "Solve for x",
     solutions: [8],
@@ -151,7 +152,7 @@ export const LESSON: ScriptedProblem[] = [
 /** The easier problem the tutor pivots to after a pause (R-21, first rung). */
 export const CONFIDENCE_BUILDER: ScriptedProblem = {
   problem_id: "warmup",
-  skill_id: "alg1.linear.one_step",
+  skill_id: "one_step_equations",
   prompt: "x + 4 = 9",
   instruction: "Solve for x",
   solutions: [5],
@@ -231,3 +232,31 @@ export const SAFETY_RESOURCES: SafetyResource[] = [
   { name: "988 Suicide & Crisis Lifeline", contact: "Call or text 988 (US)", description: "Free and confidential, any time of day." },
   { name: "Crisis Text Line", contact: "Text HOME to 741741 (US)", description: "Text with a trained counselor." },
 ];
+
+// Probing (R-01): before teaching a miss, the primer checks the prerequisite one level down,
+// then one more, with the skill map's own probes. A probe has no hints of its own.
+export const PROBE_LEAD = "Before we fix that line, one quick check on something underneath it. Just your best try.";
+export const PROBE_DEEPER = "One more quick check, a level further down.";
+export const PROBE_THANKS = "Thanks, that tells me a lot.";
+export const PREREQS_SOLID = "Those basics are solid, so it's just this one move. Back to the problem.";
+
+/** The skill map's first probe for a node, as an answer-box problem. */
+export function probeProblem(skill_id: string): ScriptedProblem {
+  const probe = skillMap.nodes.find((n) => n.id === skill_id)?.probes[0];
+  if (!probe) throw new Error(`no probe for ${skill_id}`);
+  return {
+    problem_id: probe.id,
+    skill_id,
+    prompt: probe.equation.replace(/(\d)\*([a-z])/g, "$1$2").replace(/\*/g, " \\times "),
+    instruction: probe.variable === "x" ? "Solve for x" : probe.prompt,
+    solutions: [Number(probe.answer)],
+    intro: [],
+    hints: [],
+    askWhy: PROBE_THANKS,
+    afterWhy: PROBE_THANKS,
+    secondMiss: PROBE_THANKS,
+    misconceptions: [],
+    correct: [],
+  };
+}
+

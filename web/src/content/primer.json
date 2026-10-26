@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "about": "Words for the demo primer view (R-42). The server sends codes only; each code's text lives here. {skill} is filled with the skill's name from skill_map.json.",
+  "moves": {
+    "pose_problem": "New problem",
+    "accept_line": "Line checked",
+    "mark_line": "Line marked",
+    "probe": "Probe",
+    "teach": "Teach",
+    "repair": "Repair",
+    "pause": "Pause",
+    "warm_up": "Warm-up"
+  },
+  "reasons": {
+    "path_start": "Starting the path at {skill}.",
+    "path_next": "Next on the path: {skill}.",
+    "line_valid": "The line checks out. Evidence for {skill}.",
+    "line_invalid": "A wrong line in {skill}, with no known slip behind it.",
+    "slip_matched": "The wrong line matches a known slip in {skill}.",
+    "probe_prerequisite": "Before teaching, checking a prerequisite: {skill}.",
+    "probe_deeper": "Missed that too. Checking one level deeper: {skill}.",
+    "probe_passed": "Probe passed, so the gap isn't in {skill}.",
+    "gap_found": "The gap is {skill}. Teaching it with a worked example.",
+    "prereqs_solid": "Prerequisites look solid. Back to {skill}.",
+    "gap_taught": "Gap taught. Back to the {skill} problem that showed it.",
+    "back_to_problem": "Back to the {skill} problem from before.",
+    "slip_repair": "That slip has a repair puzzle. Practising the one move in {skill}.",
+    "puzzle_solved": "Puzzle solved. Evidence for {skill}.",
+    "fix_check": "A fresh {skill} problem, to check the fix holds.",
+    "solved": "Solved, every line valid. Evidence for {skill}.",
+    "answer_right": "Right answer. Evidence for {skill}.",
+    "answer_wrong": "Wrong answer. Evidence against {skill}.",
+    "three_misses": "Three misses on one {skill} problem. Suggesting a pause.",
+    "confidence": "An easier {skill} problem, to rebuild confidence."
+  },
+  "hypotheses": {
+    "suspects_gap": "Suspects a gap in {skill}. Probing.",
+    "gap_found": "Gap found: {skill}.",
+    "gap_in_skill": "Prerequisites solid. The gap is in {skill} itself.",
+    "fix_holding": "The fix is holding in {skill}."
+  }
+}

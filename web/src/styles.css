@@ -297,3 +297,59 @@ button, input { font: inherit; color: inherit; }
   margin-top: 6px; padding: 8px 12px; border-radius: 10px;
   background: var(--warm-wash); color: var(--ink); font-weight: 400;
 }
+
+/* Demo primer view (R-42): for adults watching a demo, so denser than the child UI, and set in
+   the ink colour so it reads as "behind the scenes", not part of the student's page. */
+@media (min-width: 1101px) {
+  .session--primer { grid-template-columns: minmax(340px, 5fr) 5fr 300px; }
+}
+.primer {
+  --primer-text: #e6efec;
+  --primer-soft: #a9c0c2;
+  --primer-track: rgb(255 255 255 / 12%);
+  --primer-fill: #7cc4bd;
+  --primer-pulse: #f3c06b;
+  background: var(--ink); color: var(--primer-text); border-radius: var(--radius);
+  padding: 18px 18px 20px; overflow-y: auto; font-size: 0.8rem; line-height: 1.4;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.primer h2, .primer h3 { margin: 0; }
+.primer__title { font-size: 1rem; font-weight: 700; }
+.primer__block { display: flex; flex-direction: column; gap: 8px; }
+.primer__heading { font-size: 0.8rem; font-weight: 400; color: var(--primer-soft); }
+.primer__hypothesis { font-size: 0.95rem; font-weight: 700; }
+.primer__hypothesis--none { font-weight: 400; color: var(--primer-soft); }
+
+.primer__mastery { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.primer__skill {
+  position: relative; display: grid; grid-template-columns: 1fr auto; row-gap: 4px;
+  padding: 6px 8px; border-radius: 8px;
+}
+.primer__skill--probed { background: rgb(243 192 107 / 12%); }
+.primer__p { font-variant-numeric: tabular-nums; color: var(--primer-soft); }
+.primer__bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--primer-track); overflow: hidden; }
+.primer__fill {
+  display: block; height: 100%; background: var(--primer-fill); transform-origin: left;
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.primer__pulse {
+  position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+  box-shadow: 0 0 0 2px var(--primer-pulse); opacity: 0;
+  animation: primer-pulse 1200ms ease-out 1;
+}
+@keyframes primer-pulse {
+  0% { opacity: 0; transform: scale(1); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.03); }
+}
+
+.primer__moves { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.primer__move { display: grid; gap: 2px; color: var(--primer-soft); }
+.primer__move--latest { color: var(--primer-text); }
+.primer__label { font-weight: 700; }
+.primer__move--latest .primer__label { color: var(--primer-pulse); }
+
+/* Laptops only: on a phone the student's page needs the whole screen. */
+@media (max-width: 1100px) {
+  .primer { display: none; }
+}
