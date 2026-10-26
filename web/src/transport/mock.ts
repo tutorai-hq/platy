@@ -60,6 +60,8 @@ export class MockTransport implements TutorTransport {
   private partials = 0;
   /** Problems solved with no miss and no partial, for the map's closing line. */
   private firstTry = 0;
+  /** The problem came back after a detour, so solving it now isn't a first try (R-06). */
+  private returned = false;
   /** The one warm redirect for an off-topic message on this problem has been said. */
   private redirected = false;
   private paused = false;
@@ -421,11 +423,13 @@ export class MockTransport implements TutorTransport {
     else await go();
   }
 
-  private async present(p: ScriptedProblem, intro = p.intro): Promise<void> {
+  /** Show a problem. `back` means the student is returning to it after a detour, not starting it. */
+  private async present(p: ScriptedProblem, intro = p.intro, back = false): Promise<void> {
     this.current = p;
     this.stepLines = [];
     this.misses = 0;
     this.partials = 0;
+    this.returned = back;
     this.redirected = false;
     this.hintsUsed = 0;
     this.awaitingWhy = false;
@@ -601,13 +605,13 @@ export class MockTransport implements TutorTransport {
       await this.closeSession();
       return;
     }
-    await this.present(next, back ? [BACK_TO_IT] : next.intro);
+    await this.present(next, back ? [BACK_TO_IT] : next.intro, back !== null);
   }
 
   /** The lines for a solved problem. The first-try line is true only on a clean first try (R-06). */
   private async solvedLines(p: ScriptedProblem): Promise<void> {
     this.solved++;
-    const clean = this.misses === 0 && this.partials === 0;
+    const clean = this.misses === 0 && this.partials === 0 && !this.returned;
     if (clean) this.firstTry++;
     for (const line of p.correct) await this.say(line);
     const extra = clean ? p.firstTry : p.afterMiss;
@@ -696,7 +700,7 @@ export class MockTransport implements TutorTransport {
     this.offer(DETOUR_BACK, async () => {
       this.probe = null;
       await this.newPage("problem_end");
-      await this.present(origin, [BACK_TO_IT]);
+      await this.present(origin, [BACK_TO_IT], true);
     });
   }
 
@@ -707,7 +711,7 @@ export class MockTransport implements TutorTransport {
     this.primer.dropHypothesis();
     this.think("pose_problem", "back_to_problem", origin.skill_id);
     await this.newPage("problem_end");
-    await this.present(origin, [BACK_TO_IT]);
+    await this.present(origin, [BACK_TO_IT], true);
   }
 
   /** Teach the gap with a worked example, then go back to the problem that showed it. */

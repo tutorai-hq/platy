@@ -453,6 +453,21 @@ describe("MockTransport", () => {
     });
   });
 
+    it("counts a problem solved after a detour as fixed, not as a first try (teen test re-run)", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      await h.cont(); // the quick check
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "5" });
+      await h.cont(); // back to the problem
+      expect(h.events.filter((e) => e.type === "problem").at(-1)).toMatchObject({ problem_id: "s1" });
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
+      await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 6" });
+      h.t.demo("skip"); // past s2, which doesn't count as solved
+      await h.settle();
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 1, first_try: 0 });
+    });
+
   describe("self-explanation (R-03, teen test 2026-10-26)", () => {
     // A tester answered "what do you undo first, and why?" and the screen moved on at once,
     // wiping their words and Platy's reply.

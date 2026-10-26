@@ -208,7 +208,7 @@ After a solved problem the server sends `next_up` ("Next problem") too, and wait
 readers were still on the check line (teen test re-run 2026-10-26). The new-page note shows once,
 on the problem card, and the next problem arrives before its intro streams. After the last one,
 the closing line finishes and `next_up` ("See my map") waits for its tap too. `session_end`
-carries `first_try` (problems solved with no miss), and the map's closing
+carries `first_try` (problems solved with no miss, and not after a detour), and the map's closing
 line is picked from it and `solved` (`content/map.json`), so it says what happened rather than
 "you stuck with the tricky parts" to a 4-of-5 student.
 
