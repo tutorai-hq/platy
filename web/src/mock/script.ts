@@ -14,6 +14,8 @@ export interface ScriptedProblem {
   instruction: string;
   /** "steps": solved one checked line at a time (R-39). Answer box otherwise. */
   format?: "steps";
+  /** The letter the answer is for: x when absent, null for a value to work out (R-18). */
+  variable?: string | null;
   solutions: number[];
   intro: string[];
   hints: string[];
@@ -262,6 +264,7 @@ export function probeProblem(skill_id: string): ScriptedProblem {
     skill_id,
     prompt: probe.equation.replace(/(\d)\*([a-z])/g, "$1$2").replace(/\*/g, " \\times "),
     instruction: probe.variable === "x" ? "Solve for x" : probe.prompt,
+    variable: probe.variable ?? null,
     solutions: [Number(probe.answer)],
     intro: [],
     hints: [],

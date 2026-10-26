@@ -55,7 +55,11 @@ by" screen, which holds until you reload the page.
    `7, -7` or `x = 7 or x = -7` solves it.
 6. **Three misses on one problem** (or three wrong lines) brings up the pause screen, then an easier warm-up, then
    back to the problem (R-21).
-7. **The math keypad (R-18)** sits under every math box. On a phone (try it at 390×844 with touch)
+7. **The answer box (R-18)** takes focus when a new problem arrives on a laptop (not on a phone,
+   where focus would dock the keypad over the problem). Its placeholder is the server's example
+   of the answer's form (`answer_example`: "like x = 4", or "like x = 3, x = -3" for two roots,
+   never the answer), × clears it, a wrong or unreadable answer is selected so typing replaces
+   it, and Check waits until "Platy reads" can show all of it. **The math keypad** sits under every math box. On a phone (try it at 390×844 with touch)
    it docks at the bottom like a keyboard while the box has focus, and the phone's own keyboard
    stays down. **abc** brings that keyboard back for letters and words, and **↵** checks the
    answer. On a laptop the keypad stays under the box; its keys are out of the Tab order because

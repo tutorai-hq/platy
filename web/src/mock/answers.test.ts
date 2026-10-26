@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkAnswer, readAnswer } from "./answers";
+import { answerExample, checkAnswer, readAnswer } from "./answers";
 
 describe("readAnswer", () => {
   it.each([
@@ -31,5 +31,24 @@ describe("checkAnswer", () => {
     expect(checkAnswer("±7", [7, -7])).toBe("correct");
     expect(checkAnswer("7, 8", [7, -7])).toBe("incorrect");
     expect(checkAnswer("hmm", [5])).toBe("unreadable");
+  });
+});
+
+describe("answerExample (R-18)", () => {
+  it("uses the problem's own letter, and two values when there are two solutions", () => {
+    expect(answerExample("b", [5])).toBe("b = 4");
+    expect(answerExample("x", [7, -7])).toBe("x = 3, x = -3");
+    expect(answerExample(null, [24])).toBe("4");
+  });
+
+  it("never shows a solution (R-02)", () => {
+    expect(answerExample("x", [4])).toBe("x = 3");
+    expect(answerExample("x", [-4])).toBe("x = 3");
+    expect(answerExample("x", [3, -3])).toBe("x = 4, x = -4");
+  });
+
+  it("has none for an expression, where a number would mislead", () => {
+    expect(answerExample(null, [Number("2*x + 7")])).toBeUndefined();
+    expect(answerExample("x", [])).toBeUndefined();
   });
 });

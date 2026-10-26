@@ -29,6 +29,12 @@ export interface Problem {
    * skill map before teaching (R-01). "warmup": the easier problem after a pause (R-21).
    */
   kind: "practice" | "probe" | "warmup";
+  /**
+   * The form an answer takes, in the student's own notation and never the answer itself: "b = 4",
+   * or "x = 3, x = -3" when there are two (R-18). The answer box shows it as its example.
+   * Proposed for Connor; optional, and the box says just "Your answer" without it.
+   */
+  answer_example?: string;
   /** 1-based position in this session, for "Problem 2 of 3". */
   position: number;
   total: number;

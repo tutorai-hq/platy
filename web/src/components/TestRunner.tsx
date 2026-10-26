@@ -5,6 +5,7 @@ import { Tex } from "../math/MathText";
 import { CHECKED_AS, type GeneratedProblem } from "../mock/generate";
 import { POST_TEST, PRE_TEST, scoreTest, type TestScore } from "../mock/pretest";
 import { TEST_DONE, TEST_INSTRUCTIONS, TEST_INTRO, TEST_NOTE, TEST_TITLE } from "../mock/script";
+import { canCheck } from "./answer";
 import { MathInput } from "./MathInput";
 
 // The pre and post test (R-26): one problem at a time, with no hints and no feedback, and a
@@ -123,7 +124,7 @@ export function TestQuestion({ problem, index, total, draft, onDraft, onNext, on
         autoFocus
       />
       <div className="problem__actions">
-        <button type="button" className="btn btn--primary" onClick={onNext} disabled={!draft.trim()}>
+        <button type="button" className="btn btn--primary" onClick={onNext} disabled={!canCheck(draft)}>
           {index + 1 < total ? "Next question" : "Finish"}
         </button>
         <button type="button" className="btn btn--quiet" onClick={onSkip}>

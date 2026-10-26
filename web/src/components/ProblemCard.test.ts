@@ -17,6 +17,13 @@ const render = (p: Problem, feedback: "incorrect" | null, nextUp: string | null)
   renderToStaticMarkup(createElement(ProblemCard, { problem: p, feedback, onAnswer: () => {}, onHint: () => {}, nextUp, onNext: () => {} }));
 
 describe("problem card", () => {
+  it("uses the server's example for the box's placeholder (R-18)", () => {
+    const html = renderToStaticMarkup(
+      createElement(ProblemCard, { problem: { ...problem("practice", 3), answer_example: "x = 3, x = -3" }, feedback: null, onAnswer: () => {}, onHint: () => {}, nextUp: null, onNext: () => {} }),
+    );
+    expect(html).toContain('placeholder="Your answer, like x = 3, x = -3"');
+  });
+
   it("names a quick check, a warm-up and a lesson problem for what they are", () => {
     expect(problemLabel(problem("probe"))).toBe("Quick check");
     expect(problemLabel(problem("warmup"))).toBe("Warm-up");

@@ -38,3 +38,16 @@ export function matchesValue(text: string, value: number): boolean {
   const values = readAnswer(text);
   return values !== null && values.length > 0 && values.every((v) => close(v, value));
 }
+
+/**
+ * The answer box's example of the answer's form (R-18): "b = 4", or "x = 3, x = -3" for two
+ * solutions. Its numbers are never a solution, so the example can't give one away (R-02). None
+ * for an expression to simplify, where a number would mislead.
+ */
+export function answerExample(variable: string | null, solutions: number[]): string | undefined {
+  if (solutions.length === 0 || !solutions.every(Number.isFinite)) return undefined;
+  const two = solutions.length > 1;
+  const n = (two ? [3, 4, 6, 2, 8] : [4, 3, 6, 2, 8]).find((c) => !solutions.some((s) => close(Math.abs(s), c)))!;
+  const one = (v: number) => (variable ? `${variable} = ${v}` : String(v));
+  return two ? `${one(n)}, ${one(-n)}` : one(n);
+}

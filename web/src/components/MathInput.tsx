@@ -3,6 +3,7 @@ import { KEYPAD, press, type Key } from "../math/keypad";
 import { childMathToLatex } from "../math/latex";
 import { MathText, Tex } from "../math/MathText";
 import { TutorLine } from "../session/tutorLine";
+import { canCheck } from "./answer";
 
 interface Props {
   id: string;
@@ -12,10 +13,18 @@ interface Props {
   onChange: (value: string) => void;
   onSubmit: () => void;
   disabled?: boolean;
-  autoFocus?: boolean;
+  /** "laptop": focus on arrival only where there's a mouse, never on a phone (R-18). */
+  autoFocus?: boolean | "laptop";
+  /** The accessible name of the clear (×) button. */
+  clearLabel?: string;
+  /** Each change selects the box's text on a laptop, so typing replaces it (R-18). */
+  select?: number;
 }
 
-export function MathInput({ id, label, value, placeholder, onChange, onSubmit, disabled, autoFocus }: Props) {
+// A phone or tablet has no fine pointer. There, focus docks the keypad over the problem.
+const onLaptop = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: fine)").matches === true;
+
+export function MathInput({ id, label, value, placeholder, onChange, onSubmit, disabled, autoFocus, clearLabel = "Clear answer", select = 0 }: Props) {
   const input = useRef<HTMLInputElement>(null);
   // On a phone or tablet the keypad stands in for the device keyboard, so the box asks for none
   // (inputMode "none"). "abc" brings the device keyboard back for letters and words; any other key
@@ -31,13 +40,32 @@ export function MathInput({ id, label, value, placeholder, onChange, onSubmit, d
     if (disabled) setFocused(false);
   }, [disabled]);
   const latex = childMathToLatex(value);
+  const readable = canCheck(value);
   const tutorLine = useContext(TutorLine);
+
+  // A new problem's box takes focus on a laptop, so typing goes straight in (R-18). Never away
+  // from the chat box, mid-sentence.
+  useEffect(() => {
+    const el = input.current;
+    if (autoFocus !== "laptop" || !el || !onLaptop() || !free(el)) return;
+    el.focus();
+  }, [autoFocus]);
+
+  const selected = useRef(select);
+  useEffect(() => {
+    const el = input.current;
+    if (select === selected.current) return;
+    selected.current = select;
+    if (!el || !onLaptop() || !free(el)) return;
+    el.focus();
+    el.select();
+  }, [select]);
 
   const tap = (key: Key) => {
     const el = input.current;
     if (!el) return;
     if (key.action.kind === "submit") {
-      if (!value.trim()) return;
+      if (!readable) return;
       // Put the keypad away so the tutor's reply in the chat isn't hidden behind it.
       el.blur();
       onSubmit();
@@ -69,38 +97,57 @@ export function MathInput({ id, label, value, placeholder, onChange, onSubmit, d
       <label htmlFor={id} className="visually-hidden">
         {label}
       </label>
-      <input
-        ref={input}
-        id={id}
-        className="math-input__field"
-        value={value}
-        placeholder={placeholder}
-        disabled={disabled}
-        autoFocus={autoFocus}
-        inputMode={deviceKeyboard ? "text" : "none"}
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          if (refocusing.current) return;
-          setFocused(false);
-          // Leaving the box puts the device keyboard away; next time the keypad comes back.
-          setDeviceKeyboard(false);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && value.trim()) {
-            e.preventDefault();
-            onSubmit();
-          }
-        }}
-      />
+      <div className="math-input__box">
+        <input
+          ref={input}
+          id={id}
+          className="math-input__field"
+          value={value}
+          placeholder={placeholder}
+          disabled={disabled}
+          autoFocus={autoFocus === true}
+          inputMode={deviceKeyboard ? "text" : "none"}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            if (refocusing.current) return;
+            setFocused(false);
+            // Leaving the box puts the device keyboard away; next time the keypad comes back.
+            setDeviceKeyboard(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && readable) {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+        />
+        {/* Clears the box in one tap (R-18). Inside the field, away from the keypad's ⌫. */}
+        {value && !disabled && (
+          <button
+            type="button"
+            className="math-input__clear"
+            aria-label={clearLabel}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onChange("");
+              input.current?.focus();
+            }}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        )}
+      </div>
       <p className="math-preview" aria-live="polite">
         {latex && (
           <>
-            <span className="math-preview__label">Platy reads:</span> <Tex latex={latex} />
+            {/* Check waits until all of it reads (R-18); the label says why it's waiting. */}
+            <span className="math-preview__label">{readable ? "Platy reads:" : "Platy can't read all of this yet:"}</span>{" "}
+            <Tex latex={latex} />
           </>
         )}
       </p>
@@ -138,4 +185,10 @@ export function MathInput({ id, label, value, placeholder, onChange, onSubmit, d
       </div>
     </div>
   );
+}
+
+/** Nothing else has the student's focus: the page, or a control in the same card. */
+function free(el: HTMLElement): boolean {
+  const at = document.activeElement;
+  return !at || at === document.body || el.closest(".problem")?.contains(at) === true;
 }

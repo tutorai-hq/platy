@@ -1,5 +1,5 @@
 import type { PaletteId, PuzzleMove, PuzzleTemplate } from "../content/types";
-import { checkAnswer, matchesValue, readAnswer } from "../mock/answers";
+import { answerExample, checkAnswer, matchesValue, readAnswer } from "../mock/answers";
 import { SLIPS, slipRepair } from "../content/slips";
 import { DEMO_NODES, type DemoNode, isOneOf, type Level, problemSession, seeded } from "../mock/generate";
 import { MockPrimer, PROBE_BELOW } from "../mock/primer";
@@ -426,6 +426,7 @@ export class MockTransport implements TutorTransport {
       instruction: p.instruction,
       format: p.format ?? "answer",
       kind,
+      answer_example: answerExample(p.variable === undefined ? "x" : p.variable, p.solutions),
       position, // 0 for the confidence builder, which isn't one of the lesson's problems
       total: lessonOnly.length,
     });

@@ -6,6 +6,7 @@ import type { AnswerFeedback } from "../session/state";
 import { MathInput } from "./MathInput";
 import { Mascot } from "./Mascot";
 import { NextUp } from "./NextUp";
+import { answerPlaceholder, canCheck, selectsAfter } from "./answer";
 
 const FEEDBACK: Record<Exclude<AnswerFeedback, null>, { text: string; tone: string }> = {
   correct: { text: "That's right!", tone: "good" },
@@ -42,6 +43,7 @@ interface Props {
 export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp, onNext }: Props) {
   const [draft, setDraft] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
+  const [select, setSelect] = useState(0);
   const problemId = problem?.problem_id;
 
   useEffect(() => {
@@ -51,6 +53,8 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
 
   useEffect(() => {
     if (feedback) setShowFeedback(true);
+    // A wrong answer is selected, so the next try replaces it rather than adding to it (R-18).
+    if (selectsAfter(feedback)) setSelect((n) => n + 1);
   }, [feedback]);
 
   if (!problem) {
@@ -66,7 +70,7 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
   const solved = feedback === "correct";
   const locked = solved || nextUp !== null;
   const submit = () => {
-    if (!draft.trim() || locked) return;
+    if (!canCheck(draft) || locked) return;
     onAnswer(problem.problem_id, draft.trim());
   };
   const fb = showFeedback && feedback ? ((problem.kind === "probe" && PROBE_FEEDBACK[feedback]) || FEEDBACK[feedback]) : null;
@@ -82,11 +86,14 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
       </div>
 
       <MathInput
+        key={problem.problem_id}
         id="answer"
         label="Your answer"
         value={draft}
-        placeholder="Your answer, like x = 4"
+        placeholder={answerPlaceholder(problem)}
         disabled={locked}
+        autoFocus="laptop"
+        select={select}
         onChange={(v) => {
           setDraft(v);
           setShowFeedback(false);
@@ -110,7 +117,7 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
         <NextUp label={nextUp} onNext={onNext} />
       ) : (
         <div className="problem__actions dock-bottom">
-          <button type="button" className="btn btn--primary" onClick={submit} disabled={solved || !draft.trim()}>
+          <button type="button" className="btn btn--primary" onClick={submit} disabled={solved || !canCheck(draft)}>
             Check my answer
           </button>
           <button type="button" className="btn btn--quiet" onClick={() => onHint(problem.problem_id)} disabled={solved}>

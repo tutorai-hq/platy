@@ -4,7 +4,8 @@ import type { ClientEvent, PrimerState, ServerEvent } from "../protocol";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
-import { EXPLAIN_FIRST, LESSON, STEP_LESSON } from "../mock/script";
+import { answerExample } from "../mock/answers";
+import { EXPLAIN_FIRST, LESSON, probeProblem, STEP_LESSON } from "../mock/script";
 import { MockTransport } from "./mock";
 
 const FAST = { thinkMs: 0, wordMs: 0, resetMs: 0 };
@@ -369,6 +370,20 @@ describe("MockTransport", () => {
       expect(h.events).toContainEqual({ type: "puzzle_done", instance_id: id });
       expect(h.problems()).toEqual(["p1", "p1"]);
     });
+  });
+
+  it("gives each answer box an example in the problem's own letter, never the answer (R-18)", async () => {
+    const h = harness();
+    await h.settle();
+    const examples = () => h.events.flatMap((e) => (e.type === "problem" ? [[e.prompt, e.answer_example]] : []));
+    h.t.demo("skip");
+    await h.settle();
+    h.t.demo("skip");
+    await h.settle();
+    expect(examples()).toEqual([["3x + 5 = 20", "x = 4"], ["2(x - 3) = 10", "x = 4"], ["x^2 = 49", "x = 3, x = -3"]]);
+    // The skill map's "what do you add?" probe is about b, not x.
+    const probe = probeProblem("inverse_operations");
+    expect(answerExample(probe.variable ?? "x", probe.solutions)).toBe("b = 3");
   });
 
   describe("self-explanation (R-03, teen test 2026-10-26)", () => {

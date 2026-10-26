@@ -7,7 +7,8 @@ import { MathInput } from "./MathInput";
 // Teen test 2026-10-26: on a phone the docked keypad covered the chat, and testers missed what
 // Platy said (R-27).
 
-const box = () => createElement(MathInput, { id: "a", label: "Your answer", value: "", onChange: () => {}, onSubmit: () => {} });
+const box = (value = "", disabled = false) =>
+  createElement(MathInput, { id: "a", label: "Your answer", value, disabled, onChange: () => {}, onSubmit: () => {} });
 
 describe("math keypad dock (R-27)", () => {
   it("carries Platy's newest line above the keys, hidden from screen readers (the chat reads it)", () => {
@@ -18,5 +19,18 @@ describe("math keypad dock (R-27)", () => {
 
   it("has no line to show outside a session", () => {
     expect(renderToStaticMarkup(box())).not.toContain("keypad-dock__tutor");
+  });
+});
+
+describe("the answer box's clear button and preview (R-18, teen test 2026-10-26)", () => {
+  it("offers a named clear button once there's something to clear", () => {
+    expect(renderToStaticMarkup(box("x = 4"))).toContain('aria-label="Clear answer"');
+    expect(renderToStaticMarkup(box(""))).not.toContain("math-input__clear");
+    expect(renderToStaticMarkup(box("x = 4", true))).not.toContain("math-input__clear");
+  });
+
+  it("says when it can't read all of what's typed yet", () => {
+    expect(renderToStaticMarkup(box("x = 4"))).toContain("Platy reads:");
+    expect(renderToStaticMarkup(box("x ="))).toContain("Platy can&#x27;t read all of this yet:");
   });
 });

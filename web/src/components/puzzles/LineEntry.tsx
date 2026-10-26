@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { canCheck } from "../answer";
 import { MathInput } from "../MathInput";
 
 interface Props {
@@ -10,8 +11,8 @@ interface Props {
   onSubmit: (text: string) => void;
   /** A move is waiting for its verdict; the box stays editable but can't send. */
   busy: boolean;
-  /** Take focus on mount: the box replaced the control the child just used. */
-  autoFocus?: boolean;
+  /** Take focus on mount: the box replaced the control the child just used. "laptop": only there. */
+  autoFocus?: boolean | "laptop";
   /** More buttons for the same row, like the hint. */
   children?: ReactNode;
 }
@@ -20,7 +21,7 @@ interface Props {
 export function LineEntry({ id, prompt, placeholder, button, onSubmit, busy, autoFocus, children }: Props) {
   const [draft, setDraft] = useState("");
   const submit = () => {
-    if (draft.trim() && !busy) onSubmit(draft.trim());
+    if (canCheck(draft) && !busy) onSubmit(draft.trim());
   };
   return (
     <>
@@ -35,13 +36,14 @@ export function LineEntry({ id, prompt, placeholder, button, onSubmit, busy, aut
         autoFocus={autoFocus}
         onChange={setDraft}
         onSubmit={submit}
+        clearLabel="Clear line"
       />
       <div className="problem__actions dock-bottom">
         <button
           type="button"
           className="btn btn--primary"
           onClick={submit}
-          disabled={!draft.trim()}
+          disabled={!canCheck(draft)}
           aria-disabled={busy || undefined}
         >
           {button}

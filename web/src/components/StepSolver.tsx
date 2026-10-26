@@ -109,7 +109,7 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: P
           placeholder="One step, as an equation"
           button="Check this line"
           busy={busy}
-          autoFocus={next > 1}
+          autoFocus={next > 1 || "laptop"}
           onSubmit={(text) => onStep(problem.problem_id, next, text)}
         >
           <button type="button" className="btn btn--quiet" onClick={() => onHint(problem.problem_id)}>
