@@ -126,7 +126,7 @@ const watch: Item = {
     },
   },
   reflection: "In your own words: in a problem like this, what do you undo first, and why?",
-  thanks: "Thanks. Undoing the $+ {b}$ first is the step I asked about. Next, {player} starts one and you write the last line.",
+  thanks: "Thanks, undoing the $+ {b}$ first is the step I asked about. Next, {player} starts one and you write the last line.",
 };
 
 // Text fills from {name} slots: the skin's words and the instance's numbers. LaTeX in here
@@ -216,7 +216,7 @@ export const ITEMS: Record<PuzzleTemplate, Item> = {
     item_id: "lin2-balance",
     template: "balance",
     skill_id: "two_step_equations",
-    intro: "This one's a balance scale. Every {container} holds the same number of {units}. How many?",
+    intro: "This one's a balance scale, and every {container} holds the same number of {units}. How many?",
     instructions: "Get one {container} alone without tipping the scale.",
     hints: [
       "What's on the side with the {containers}, besides the {containers}?",
@@ -379,11 +379,11 @@ export const WORKED_FADES: [Item, Item, Item] = [
       "Divide both sides of line 1 by ${a}$. What's left?",
     ],
     reflection: "How did you know to divide by ${a}$ for the last line?",
-    thanks: "Thanks. Dividing by ${a}$ is what undoes the times ${a}$. Next one's all yours, every step.",
+    thanks: "Thanks, dividing by ${a}$ undoes the times ${a}$. Next you write every step yourself.",
   },
   {
     ...watch,
-    intro: "This one's all yours. Write it a step at a time, the way {player} did.",
+    intro: "Now you write every step, the way {player} did.",
     instructions: "Solve it one step at a time.",
     hints: [
       "What does the problem do to x, and in what order?",

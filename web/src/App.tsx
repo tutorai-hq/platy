@@ -140,7 +140,7 @@ export function App() {
                 <p>
                   You solved {s.state.solved} {s.state.solved === 1 ? "problem" : "problems"} today.
                 </p>
-                <YourMap report={s.state.map} />
+                <YourMap report={s.state.map} solved={s.state.solved} firstTry={s.state.firstTry} />
                 <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                   Practice again
                 </button>

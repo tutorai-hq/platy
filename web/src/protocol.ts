@@ -97,8 +97,11 @@ export type ServerEvent =
   | { type: "safety_escalation"; resources: SafetyResource[] }
   /** Fail closed (P-3): the session is over, show a calm error. */
   | { type: "error"; code: string }
-  /** `map` is every skill's mastery over the session, for "Your map" (R-13). */
-  | { type: "session_end"; solved: number; map?: SkillReport[] }
+  /**
+   * `map` is every skill's mastery over the session, for "Your map" (R-13). `first_try` is how many
+   * of the solved problems had no miss on the way (proposed; the map's closing line uses it).
+   */
+  | { type: "session_end"; solved: number; first_try?: number; map?: SkillReport[] }
   /**
    * Content (R-37). A puzzle replaces the problem card until puzzle_done. A second puzzle
    * event with the same instance_id only changes its look (a new skin), not its progress.

@@ -113,16 +113,24 @@ describe("Your map (R-13)", () => {
     expect(views.has("not_a_skill")).toBe(false);
   });
 
-  it("has one line of encouragement about effort, from the fixed table", () => {
-    expect(encouragement(mapStates(report(BASE)))).toMatch(/^Showing up is the hard part/);
-    expect(encouragement(mapStates(report({ ...BASE, two_step_equations: 0.5 }, BASE)))).toMatch(/practiced a skill/);
-    expect(encouragement(mapStates(report({ ...BASE, two_step_equations: 0.5, one_step_equations: 0.7 }, BASE)))).toMatch(/practiced 2 skills/);
+  it("has one line of encouragement, true to what happened, from the fixed table", () => {
+    // Teen test 2026-10-26: "you stuck with the tricky parts" went to a student who got 4 of 5 first time.
+    const none = mapStates(report(BASE));
+    const one = mapStates(report({ ...BASE, two_step_equations: 0.5 }, BASE));
+    const two = mapStates(report({ ...BASE, two_step_equations: 0.5, one_step_equations: 0.7 }, BASE));
+    expect(encouragement(none, 5, 5)).toMatch(/^Showing up is the hard part/);
+    expect(encouragement(two, 5, 5)).toBe("Every problem right on the first try. You practiced 2 skills today.");
+    expect(encouragement(two, 5, 4)).toBe("4 of 5 right on the first try, and you fixed the rest. You practiced 2 skills today.");
+    expect(encouragement(one, 5, 1)).toBe("Some of these were hard, and you kept going. You practiced 1 skill today.");
+    // A server that doesn't count first tries gets the plain line.
+    expect(encouragement(one)).toBe("You practiced 1 skill today.");
   });
 
   it("keeps the map in memory for the end screen only, and drops it at the next start", () => {
     let s = reducer(initialState, { type: "started" });
-    s = reducer(s, { type: "server", event: { type: "session_end", solved: 2, map: report(BASE) } });
+    s = reducer(s, { type: "server", event: { type: "session_end", solved: 2, first_try: 1, map: report(BASE) } });
     expect(s.map).toHaveLength(skillMap.nodes.length);
+    expect(s.firstTry).toBe(1);
     expect(reducer(s, { type: "started" }).map).toBeNull();
     expect(reducer(s, { type: "restart" }).map).toBeNull();
   });

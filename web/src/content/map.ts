@@ -149,10 +149,20 @@ export function mapStates(report: readonly SkillReport[]): Map<string, NodeView>
   return views;
 }
 
-/** The one line of encouragement, about effort (skills practiced), from the fixed table. */
-export function encouragement(views: Map<string, NodeView>): string {
+/**
+ * The one line of encouragement, from the fixed table, picked from what happened: skills practiced,
+ * problems solved and how many on the first try (teen test 2026-10-26: "you stuck with the tricky
+ * parts" to a student who got 4 of 5 first time). `firstTry` null when the server didn't say.
+ */
+export function encouragement(views: Map<string, NodeView>, solved = 0, firstTry: number | null = null): string {
+  const e = words.encouragement;
   const n = [...views.values()].filter((v) => v.moved).length;
-  if (n === 0) return words.encouragement.none;
-  if (n === 1) return words.encouragement.moved_one;
-  return words.encouragement.moved.replace("{n}", String(n));
+  if (n === 0) return e.none;
+  const skills = n === 1 ? e.skills_one : e.skills.replace("{n}", String(n));
+  const line =
+    firstTry === null || solved === 0 ? e.practiced
+    : firstTry >= solved ? e.all_first_try
+    : firstTry * 2 >= solved ? e.most_first_try
+    : e.kept_going;
+  return line.replace("{skills}", skills).replace("{first}", String(firstTry)).replace("{solved}", String(solved));
 }

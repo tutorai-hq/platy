@@ -33,7 +33,13 @@ function lines(name: string): string[] {
   return out;
 }
 
-export function YourMap({ report }: { report: readonly SkillReport[] }) {
+interface Props {
+  report: readonly SkillReport[];
+  solved?: number;
+  firstTry?: number | null;
+}
+
+export function YourMap({ report, solved = 0, firstTry = null }: Props) {
   const views = mapStates(report);
   const { pos, width, height } = LAYOUT;
 
@@ -56,7 +62,7 @@ export function YourMap({ report }: { report: readonly SkillReport[] }) {
 
   return (
     <figure className="map">
-      <p className="map__cheer">{encouragement(views)}</p>
+      <p className="map__cheer">{encouragement(views, solved, firstTry)}</p>
       <div className="map__scroll" ref={scroller}>
         <svg className="map__svg" viewBox={`-8 -8 ${width + 16} ${height + 16}`} width={width + 16} aria-hidden="true">
           {EDGES.map(({ from, to }) => {

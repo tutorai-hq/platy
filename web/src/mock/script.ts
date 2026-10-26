@@ -25,7 +25,11 @@ export interface ScriptedProblem {
   afterWhy: string;
   /** Reply to the second wrong answer. */
   secondMiss: string;
+  /** A right-but-incomplete answer. `{root}` is the solution the student typed (R-06). */
   partial?: string;
+  /** Said after `correct` on a clean first try (no miss, no partial), or otherwise. */
+  firstTry?: string;
+  afterMiss?: string;
   /**
    * Wrong answers that point at one specific slip, with a reply that names it. A slip with a
    * repair puzzle sends the child there first, once (the content library's repair role).
@@ -50,15 +54,15 @@ export const STEP_LESSON: ScriptedProblem[] = [
     solutions: [6],
     intro: ["Let's solve this one line by line. Write your first step under the equation, and I'll check each line as you go."],
     hints: [
-      "What's happening to $x$? It's multiplied by $2$, then $5$ is added. We undo those in reverse order.",
+      "$x$ is multiplied by $2$, then $5$ is added. Undo the last thing first.",
       "Start with the $+5$. What could you do to both sides to make it disappear?",
       "Now $x$ is still multiplied by $2$. What undoes that?",
     ],
     askWhy: "That line doesn't follow from the one above yet. What did you do to each side?",
-    afterWhy: "Thanks. Whatever you do to one side, do exactly the same to the other. Try that line again.",
+    afterWhy: "Thanks. Whatever you do to one side, do the same to the other, then try that line again.",
     secondMiss: "Look at the marked line next to the one above it. Which side changed in a different way?",
     misconceptions: [],
-    correct: ["Yes! $x = 6$, and every line on the way checks out.", "Check it: $2(6) + 5 = 17$. It works."],
+    correct: ["Yes, $x = 6$, and every line on the way checks out.", "Check it: $2(6) + 5 = 17$. It works."],
   },
   {
     problem_id: "s2",
@@ -67,14 +71,14 @@ export const STEP_LESSON: ScriptedProblem[] = [
     instruction: "Solve it one line at a time",
     format: "steps",
     solutions: [5],
-    intro: ["Fresh page. Same idea, and this one has a minus."],
+    intro: ["New problem, same idea. This one has a minus."],
     hints: [
       "$x$ is multiplied by $3$, then $4$ is taken away. Undo the last thing first.",
       "To undo $-4$, what do you do to both sides?",
       "Now undo the $\\times 3$ on both sides.",
     ],
     askWhy: "Hmm, that line doesn't match the one above. What did you do with the $-4$?",
-    afterWhy: "Got it. Taking away $4$ is undone by adding $4$, to both sides. Try the line again.",
+    afterWhy: "Got it. Taking away $4$ is undone by adding $4$ to both sides, so try the line again.",
     secondMiss: "Compare the marked line with the one above it. What happened to the $-4$ on each side?",
     misconceptions: [],
     correct: ["That's it, $x = 5$!", "Check: $3(5) - 4 = 11$."],
@@ -90,22 +94,22 @@ export const LESSON: ScriptedProblem[] = [
     solutions: [5],
     intro: ["Here's the first one. Take your time, and type your answer in the box when you're ready."],
     hints: [
-      "What's happening to $x$? It gets multiplied by $3$, then $5$ is added. We undo those in reverse order.",
+      "$x$ is multiplied by $3$, then $5$ is added. Undo those in reverse order.",
       "Start by subtracting $5$ from both sides. What's left?",
       "You should have $3x = 15$. Now divide both sides by $3$.",
     ],
     askWhy: "Not quite yet, and that's okay. Can you tell me what you did first?",
-    afterWhy: "Thanks for walking me through it. Here's a nudge: get $3x$ by itself first. What happens if you subtract $5$ from both sides?",
-    secondMiss: "Close. Try it step by step: $3x + 5 - 5 = 20 - 5$, so $3x = 15$. What's $x$?",
+    afterWhy: "Thanks. To get $3x$ by itself, what happens if you subtract $5$ from both sides?",
+    secondMiss: "Try it step by step: $3x + 5 - 5 = 20 - 5$, so $3x = 15$. What's $x$?",
     misconceptions: [
-      { value: 15, reply: "So close! $3x = 15$ is right. One more step: $x$ is still being multiplied by $3$." },
+      { value: 15, reply: "$3x = 15$ is right. One more step: $x$ is still multiplied by $3$." },
       {
         value: 25 / 3,
         reply: "I think the $5$ got added to both sides. To undo $+5$, we subtract $5$ instead.",
         repair: "spot_the_error",
       },
     ],
-    correct: ["Yes! $x = 5$. You undid the $+5$, then the $\\times 3$.", "Check it: $3(5) + 5 = 20$. It works."],
+    correct: ["Yes, $x = 5$. You undid the $+5$, then the $\\times 3$.", "Check it: $3(5) + 5 = 20$. It works."],
   },
   {
     problem_id: "p2",
@@ -113,17 +117,17 @@ export const LESSON: ScriptedProblem[] = [
     prompt: "2(x - 3) = 10",
     instruction: "Solve for x",
     solutions: [8],
-    intro: ["Fresh page. This one has parentheses."],
+    intro: ["New problem. This one has parentheses."],
     hints: [
       "You can share the $2$ across the parentheses, or divide both sides by $2$ first. Either works.",
       "Dividing both sides by $2$ gives $x - 3 = 5$.",
       "$x - 3 = 5$. What do you add to both sides?",
     ],
     askWhy: "Hmm, not yet. How did you deal with the parentheses?",
-    afterWhy: "Got it. Remember the $2$ multiplies everything inside: $2(x - 3)$ means $2x - 6$. What do you get now?",
+    afterWhy: "The $2$ multiplies everything inside, so $2(x - 3)$ means $2x - 6$. What do you get now?",
     secondMiss: "Let's try dividing first: $2(x - 3) = 10$ becomes $x - 3 = 5$. Now what's $x$?",
     misconceptions: [
-      { value: 6.5, reply: "Close! I think the $2$ only got multiplied by the $x$. It multiplies the $-3$ too." },
+      { value: 6.5, reply: "I think the $2$ only got multiplied by the $x$. It multiplies the $-3$ too." },
       { value: 2, reply: "It looks like the $3$ got subtracted instead of added. To undo $-3$, we add $3$." },
     ],
     correct: ["That's it, $x = 8$!", "Check: $2(8 - 3) = 2 \\cdot 5 = 10$."],
@@ -141,13 +145,15 @@ export const LESSON: ScriptedProblem[] = [
       "Both $7$ and $-7$ square to $49$. You can type 7, -7.",
     ],
     askWhy: "Not quite. What does $x^2$ mean to you?",
-    afterWhy: "Right idea to think about it. $x^2$ means $x \\cdot x$. Which number times itself is $49$?",
+    afterWhy: "$x^2$ means $x \\cdot x$. Which number times itself is $49$?",
     secondMiss: "Think of the times tables: which number times itself makes $49$?",
-    partial: "Yes, $7$ works! There's one more number that squares to $49$. Can you find it?",
+    partial: "Yes, ${root}$ works. Which other number squares to $49$?",
     misconceptions: [
       { value: 24.5, reply: "Careful: $x^2$ means $x \\cdot x$, not $2 \\cdot x$." },
     ],
-    correct: ["Both! $x = 7$ or $x = -7$, because $(-7)^2 = 49$ too.", "Lots of people miss the negative one. You didn't."],
+    correct: ["Both! $x = 7$ or $x = -7$, because $(-7)^2 = 49$ too."],
+    firstTry: "Lots of people miss the negative one. You didn't.",
+    afterMiss: "That's both roots.",
   },
 ];
 
@@ -158,24 +164,25 @@ export const CONFIDENCE_BUILDER: ScriptedProblem = {
   prompt: "x + 4 = 9",
   instruction: "Solve for x",
   solutions: [5],
-  intro: ["Let's do a quick one to get our groove back."],
+  intro: ["Let's do a quick one first."],
   hints: ["What number plus $4$ makes $9$?", "Subtract $4$ from both sides."],
   askWhy: "Almost. What did you do with the $4$?",
   afterWhy: "Thanks! To undo $+4$, subtract $4$ from both sides.",
   secondMiss: "Try $9 - 4$.",
   misconceptions: [{ value: 13, reply: "Looks like the $4$ got added. To undo $+4$, we subtract it." }],
-  correct: ["Nice, $x = 5$. Now let's go back to the one from before. You've got this."],
+  correct: ["Yes, $x = 5$. Now back to the one from before."],
 };
 
-export const CLOSING = "That's all of them. You stuck with it, and that's what counts. See you next time!";
+export const CLOSING = "That's all of them. You kept going to the end, and that's what counts.";
+/** The button after the closing line; the map waits for it, or comes by itself after a moment. */
+export const SEE_MAP = "See my map";
 
-export const NO_ANSWERS =
-  "I won't just hand it over, because working it out is what makes it stick. But I'll help. Want a hint?";
+export const NO_ANSWERS = "I won't give the answer, because working it out is how you learn it. Want a hint instead?";
 
-export const NUDGES = [
-  "Good thinking. What would you try first?",
-  "I like that you're working through it. Try your idea in the answer box.",
-];
+/** For a message Platy can't place: neutral, never praise (R-06, teen test 2026-10-26). */
+export const NUDGES = ["What would you try first?", "Try your idea in the answer box, and I'll check it."];
+/** One warm redirect for a message with no math in it; after that, the nudges. */
+export const OFF_TOPIC = "Let's keep this about the problem. What's the first thing you'd do to it?";
 
 // Step-by-step lines (R-39).
 export const STEP_UNREADABLE = "I couldn't read that line. Write it as an equation with x, like the line above.";
@@ -183,30 +190,30 @@ export const STEP_IN_LINES = "Write it as the next line in your solution, so I c
 
 export const UNREADABLE = "Hmm, I couldn't read that as a number. Try something like x = 4.";
 
-export const OUT_OF_HINTS = "That's all my hints for this one. Give it a try, I'm right here.";
+export const OUT_OF_HINTS = "That's all my hints for this one. Try it, and I'll check what you write.";
 
 /** The first rung of the de-escalation ladder (R-21), before the pause is suggested. */
-export const TAKE_A_BREATH = "This one's being stubborn. Let's take a breath.";
+export const TAKE_A_BREATH = "This one's hard. Let's pause for a moment.";
 
 // Puzzle turns (R-37). The items' own lines are in mock/puzzles.ts.
 export const REPAIR_LEAD =
-  "I have a hunch about what happened there. Let's look at someone else's work first, then come back to this one.";
+  "I think I know what happened there. Let's look at someone else's work first, then come back to this one.";
 export const DEMO_LEAD = "Let's try a quick puzzle.";
 export const SHOW_ONE = "Let me show you one first. Then you'll take it over, a step at a time.";
-export const TRY_FIRST = "Give it one try first, even a guess. Then I'll help.";
+export const TRY_FIRST = "Try once first, even a guess. Then I'll help.";
 export const EXPLAIN_FIRST = "Tell me what you were thinking first, then I'll help.";
 export const NO_ANSWERS_TRY_FIRST =
-  "I won't just hand it over, because working it out is what makes it stick. Give it one try first, even a guess, and then I'll help.";
+  "I won't give the answer, because working it out is how you learn it. Try once first, even a guess, and then I'll help.";
 export const PUZZLE_UNREADABLE = "I couldn't read that one. Write it as an equation with x, like the lines above.";
-export const PUZZLE_NUDGE = "Give it a go in the puzzle. I'm right here if you get stuck.";
+export const PUZZLE_NUDGE = "Try it in the puzzle. Ask me if you get stuck.";
 /** After the student has answered a puzzle's reflection question and been thanked (R-03). */
 export const KEEP_GOING_READY = "Tap Keep going when you're ready.";
-export const BACK_TO_IT = "Now back to the one from before. You've got this.";
+export const BACK_TO_IT = "Now back to the one from before.";
 
 // A slip on a step-by-step problem (R-39, R-40): a repair puzzle on that one move, then a fresh
 // problem of the same kind to check the fix stuck (R-41), in place of the one they slipped on.
 export const STEP_REPAIR_LEAD = "I think I know what happened on that line. Let's try that one move in a quick puzzle first.";
-export const ONE_MORE = "Now a fresh one, to make sure the fix sticks. Same kind of problem, new numbers.";
+export const ONE_MORE = "Now a new one, to check the fix holds. Same kind of problem, new numbers.";
 
 /** A generated problem (R-41) as a step-by-step problem, with lines that fit any numbers. */
 export function confirmProblem(problem_id: string, skill_id: string, prompt: string, solution: number, answerText: string): ScriptedProblem {
@@ -224,10 +231,10 @@ export function confirmProblem(problem_id: string, skill_id: string, prompt: str
       "Now $x$ is still multiplied by a number. What undoes that?",
     ],
     askWhy: "That line doesn't follow from the one above yet. What did you do to each side?",
-    afterWhy: "Thanks. Whatever you do to one side, do exactly the same to the other. Try that line again.",
+    afterWhy: "Thanks. Whatever you do to one side, do the same to the other, then try that line again.",
     secondMiss: "Look at the marked line next to the one above it. Which side changed in a different way?",
     misconceptions: [],
-    correct: [`Yes! $x = ${answerText}$, and every line checks out. That fix stuck.`],
+    correct: [`Yes, $x = ${answerText}$, and every line checks out. The fix held.`],
   };
 }
 

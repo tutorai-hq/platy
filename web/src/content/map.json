@@ -1,9 +1,13 @@
 {
   "schema_version": 1,
-  "about": "Fixed words for the end-of-session map (R-13). The encouragement is about effort, never about being smart.",
+  "about": "Fixed words for the end-of-session map (R-13). The line is picked from what happened (problems solved, first tries), about effort, never about being smart.",
   "encouragement": {
-    "moved": "You stuck with the tricky parts today and practiced {n} skills. That's how a map fills in.",
-    "moved_one": "You stuck with the tricky part today and practiced a skill. That's how a map fills in.",
-    "none": "Showing up is the hard part, and you did it. Next time, these start to move."
+    "none": "Showing up is the hard part, and you did it. Next time, these start to move.",
+    "practiced": "You practiced {skills} today.",
+    "all_first_try": "Every problem right on the first try. You practiced {skills} today.",
+    "most_first_try": "{first} of {solved} right on the first try, and you fixed the rest. You practiced {skills} today.",
+    "kept_going": "Some of these were hard, and you kept going. You practiced {skills} today.",
+    "skills_one": "1 skill",
+    "skills": "{n} skills"
   }
 }

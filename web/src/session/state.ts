@@ -71,6 +71,8 @@ export interface SessionState {
   moving: boolean;
   errorCode: string | null;
   solved: number;
+  /** Problems solved with no miss, from session_end; null when the server didn't say. */
+  firstTry: number | null;
   /**
    * The demo primer view (R-42): codes and numbers only, never chat. It outlasts resets, since
    * it's the primer's view of the session, and goes when the session ends.
@@ -107,6 +109,7 @@ export const initialState: SessionState = {
   moving: false,
   errorCode: null,
   solved: 0,
+  firstTry: null,
   primer: null,
   map: null,
   nextUp: null,
@@ -245,7 +248,7 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
     case "error":
       return { ...initialState, phase: "error", errorCode: event.code };
     case "session_end":
-      return { ...initialState, phase: "ended", solved: event.solved, map: event.map ?? null };
+      return { ...initialState, phase: "ended", solved: event.solved, firstTry: event.first_try ?? null, map: event.map ?? null };
   }
 }
 

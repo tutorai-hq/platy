@@ -148,7 +148,7 @@ carries JSON events.
 Server to client: `tutor_message {message_id, delta, done}` (streamed), `problem {problem_id,
 skill_id, prompt (LaTeX), instruction, position, total}`, `answer_result {problem_id, result}`,
 `reset {reason}`, `pause_suggested`, `topic_switch {label}`, `safety_escalation {resources}`,
-`error {code}`, `session_end {solved}`.
+`error {code}`, `session_end {solved, first_try?}`.
 
 Client to server: `child_message {text}`, `answer {problem_id, text}`, `hint_requested
 {problem_id}`, `resume`, `end_session`.
@@ -198,7 +198,10 @@ ignores answers and lines until `continue`; the chat stays open. Teen testers re
 straight swap as "I failed and it's hiding it".
 After a solved problem the server sends `next_up` ("Next problem") too, and moves on by itself
 after a moment (1.5 s in the mock) if it isn't tapped (R-17). The new-page note shows once, on the
-problem card, and the next problem arrives before its intro streams.
+problem card, and the next problem arrives before its intro streams. After the last one, the closing line finishes and `next_up` ("See my map") waits: the map
+comes on the tap, or by itself after a moment. `session_end` carries `first_try` (problems solved
+with no miss), and the map's closing line is picked from it and `solved` (`content/map.json`), so
+it says what happened rather than "you stuck with the tricky parts" to a 4-of-5 student.
 
 "Your map" (R-13, proposed) adds `map: [{skill_id, before, after, due}]` to `session_end`: each
 skill's mastery when the session started and when it ended, and whether the primer wants it

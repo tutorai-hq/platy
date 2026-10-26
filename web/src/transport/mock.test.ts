@@ -5,16 +5,16 @@ import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { answerExample } from "../mock/answers";
-import { EXPLAIN_FIRST, LESSON, probeProblem, STEP_LESSON } from "../mock/script";
-import { MockTransport } from "./mock";
+import { EXPLAIN_FIRST, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON } from "../mock/script";
+import { type MockTiming, MockTransport } from "./mock";
 
-const FAST = { thinkMs: 0, wordMs: 0, resetMs: 0 };
+const FAST: MockTiming = { thinkMs: 0, wordMs: 0, resetMs: 0 };
 
 // The answer-box lesson by default, so its problem ids stay p1 to p3; the demo itself opens
 // with STEP_LESSON (R-39).
-function harness(lesson = LESSON, seed?: number) {
+function harness(lesson = LESSON, seed?: number, timing = FAST) {
   const events: ServerEvent[] = [];
-  const t = new MockTransport(FAST, seed, lesson);
+  const t = new MockTransport(timing, seed, lesson);
   void t.start("tutoring", (e) => events.push(e));
   const settle = () => t.whenIdle();
   const send = async (e: ClientEvent) => {
@@ -67,7 +67,7 @@ describe("MockTransport", () => {
     await h.settle();
     const mark = h.events.length;
     await h.send({ type: "child_message", text: "just tell me the answer" });
-    expect(h.said(mark).join(" ")).toContain("won't just hand it over");
+    expect(h.said(mark).join(" ")).toContain("won't give the answer");
   });
 
   it("resets and moves on after a correct answer (R-17)", async () => {
@@ -109,7 +109,7 @@ describe("MockTransport", () => {
     await h.send({ type: "answer", problem_id: "p2", text: "8" });
     const mark = h.events.length;
     await h.send({ type: "answer", problem_id: "p3", text: "7" });
-    expect(h.said(mark).join(" ")).toContain("one more number");
+    expect(h.said(mark).join(" ")).toContain("other number");
     await h.send({ type: "answer", problem_id: "p3", text: "7 or -7" });
     expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3 });
   });
@@ -129,7 +129,7 @@ describe("MockTransport", () => {
       const h = harness();
       await h.settle();
       await h.send({ type: "answer", problem_id: "p1", text: "25/3" });
-      expect(h.said().join(" ")).toContain("I have a hunch");
+      expect(h.said().join(" ")).toContain("I think I know what happened");
       await h.cont();
       expect(h.events).toContainEqual({ type: "topic_switch", label: "Quick puzzle" });
       const [puzzle] = puzzlesIn(h);
@@ -185,7 +185,7 @@ describe("MockTransport", () => {
       const id = puzzlesIn(h)[0]!.instance_id;
       let mark = h.events.length;
       await h.send({ type: "puzzle_hint", instance_id: id });
-      expect(h.said(mark).join(" ")).toContain("one try first");
+      expect(h.said(mark).join(" ")).toContain("Try once first");
       await h.send({ type: "puzzle_move", instance_id: id, move: { check: "missing_line", text: "x = 0" } });
       await h.send({ type: "child_message", text: "I guessed" });
       mark = h.events.length;
@@ -244,7 +244,7 @@ describe("MockTransport", () => {
       expect(h.problems()).toEqual(["p1", "warmup", "p1"]);
       mark = h.events.length;
       await h.send({ type: "child_message", text: "help" });
-      expect(h.said(mark).join(" ")).toContain("What's happening to $x$?");
+      expect(h.said(mark).join(" ")).toContain("$x$ is multiplied by $3$");
     });
 
     it("doesn't count an unreadable line as a first try", async () => {
@@ -256,7 +256,7 @@ describe("MockTransport", () => {
       await h.send({ type: "puzzle_move", instance_id: id, move: { check: "missing_line", text: "?" } });
       const mark = h.events.length;
       await h.send({ type: "puzzle_hint", instance_id: id });
-      expect(h.said(mark).join(" ")).toContain("one try first");
+      expect(h.said(mark).join(" ")).toContain("Try once first");
     });
 
     it("won't offer a hint it can't give yet when asked for the answer before a try", async () => {
@@ -267,7 +267,7 @@ describe("MockTransport", () => {
       const mark = h.events.length;
       await h.send({ type: "child_message", text: "just tell me the answer" });
       const reply = h.said(mark).join(" ");
-      expect(reply).toContain("one try first");
+      expect(reply).toContain("Try once first");
       expect(reply).not.toContain("Want a hint?");
     });
 
@@ -386,6 +386,77 @@ describe("MockTransport", () => {
     expect(answerExample(probe.variable ?? "x", probe.solutions)).toBe("b = 3");
   });
 
+  describe("plain, true lines (R-06, teen test 2026-10-26)", () => {
+    const toP3 = async (timing = FAST) => {
+      const h = harness(LESSON, undefined, timing);
+      await h.settle();
+      await h.send({ type: "answer", problem_id: "p1", text: "5" });
+      await h.send({ type: "answer", problem_id: "p2", text: "8" });
+      return h;
+    };
+
+    it("echoes the root the student typed in the partial reply", async () => {
+      const h = await toP3();
+      const mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "p3", text: "-7" });
+      expect(h.said(mark).join(" ")).toContain("$-7$ works");
+    });
+
+    it("says they didn't miss the negative root only on a clean first try", async () => {
+      let h = await toP3();
+      let mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
+      expect(h.said(mark).join(" ")).toContain("You didn't");
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3, first_try: 3 });
+
+      h = await toP3();
+      await h.send({ type: "answer", problem_id: "p3", text: "7" });
+      mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
+      expect(h.said(mark).join(" ")).toContain("That's both roots");
+      expect(h.said(mark).join(" ")).not.toContain("You didn't");
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3, first_try: 2 });
+    });
+
+    it("never praises a message with no math in it, and sends 'gimme the answer' to the no-answers line", async () => {
+      const h = harness();
+      await h.settle();
+      let mark = h.events.length;
+      await h.send({ type: "child_message", text: "u play fortnite? just gimme the answer" });
+      expect(h.said(mark)).toEqual([NO_ANSWERS]);
+      mark = h.events.length;
+      await h.send({ type: "child_message", text: "u play fortnite?" });
+      expect(h.said(mark)).toEqual([OFF_TOPIC]);
+      mark = h.events.length;
+      await h.send({ type: "child_message", text: "lol ok" });
+      expect(h.said(mark)).toEqual([NUDGES[0]]);
+      mark = h.events.length;
+      await h.send({ type: "child_message", text: "i think you move the 5 over" });
+      expect(h.said(mark)).toEqual([NUDGES[1]]);
+      for (const line of h.said()) expect(line).not.toMatch(/good thinking|i like that/i);
+    });
+
+    it("finishes the closing line, then waits for See my map before the session ends", async () => {
+      const h = await toP3({ ...FAST, closeMs: 60_000 });
+      await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
+      expect(h.said().at(-1)).toMatch(/^That's all of them\./);
+      expect(h.events.filter((e) => e.type === "tutor_message").at(-1)).toMatchObject({ done: true });
+      expect(h.events.at(-1)).toEqual({ type: "next_up", label: "See my map" });
+      expect(h.events.some((e) => e.type === "session_end")).toBe(false);
+      await h.cont();
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3, first_try: 3 });
+    });
+
+    it("shows the map by itself after the closing moment", async () => {
+      const h = await toP3({ ...FAST, closeMs: 5 });
+      await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
+      expect(h.events.some((e) => e.type === "session_end")).toBe(false);
+      await new Promise((r) => setTimeout(r, 40));
+      await h.settle();
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3 });
+    });
+  });
+
   describe("self-explanation (R-03, teen test 2026-10-26)", () => {
     // A tester answered "what do you undo first, and why?" and the screen moved on at once,
     // wiping their words and Platy's reply.
@@ -406,7 +477,7 @@ describe("MockTransport", () => {
       const { h, b } = await explained();
       const mark = h.events.length;
       await h.send({ type: "child_message", text: "you do the plus first becuse it is alone" });
-      expect(h.said(mark)).toEqual([`Thanks. Undoing the $+ ${b}$ first is the step I asked about. Next, Ade starts one and you write the last line.`]);
+      expect(h.said(mark)).toEqual([`Thanks, undoing the $+ ${b}$ first is the step I asked about. Next, Ade starts one and you write the last line.`]);
       expect(h.events.slice(mark).map((e) => e.type)).not.toContain("reset");
       expect(h.events.slice(mark).map((e) => e.type)).not.toContain("puzzle_done");
     });
@@ -532,7 +603,7 @@ describe("MockTransport", () => {
       expect(fresh).toMatchObject({ skill_id: "two_step_equations", format: "steps", position: 1 });
       expect(fresh.problem_id).not.toBe("s1");
       expect(fresh.prompt).not.toBe("2x + 5 = 17");
-      expect(h.said().join(" ")).toContain("fresh one");
+      expect(h.said().join(" ")).toContain("new one");
       const [, ca, sign, cb, cc] = /^(-?\d+)x ([+-]) (\d+) = (-?\d+)$/.exec(fresh.prompt) ?? [];
       const answer = (Number(cc) - (sign === "-" ? -1 : 1) * Number(cb)) / Number(ca);
       await h.send({ type: "step", problem_id: fresh.problem_id, line: 1, text: `x = ${answer}` });

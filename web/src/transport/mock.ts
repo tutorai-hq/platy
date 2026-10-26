@@ -10,9 +10,9 @@ import {
   toWire,
 } from "../mock/puzzles";
 import {
-  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
+  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OFF_TOPIC, OPENING,
   OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
-  PUZZLE_UNREADABLE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SHOW_ONE, STEP_IN_LINES,
+  PUZZLE_UNREADABLE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SEE_MAP, SHOW_ONE, STEP_IN_LINES,
   STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
 } from "../mock/script";
 import type { ClientEvent, ServerEvent, SessionMode } from "../protocol";
@@ -30,9 +30,15 @@ export interface MockTiming {
    * (R-17). Unset or 0 moves on at once, with no button.
    */
   nextMs?: number;
+  /** After the closing line, how long the map waits for "See my map" before coming by itself. */
+  closeMs?: number;
 }
 
-export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 700, nextMs: 1500 };
+// What a chat message is about, for the mock's routing only. The real tutor reads the message.
+const WANTS_ANSWER = /\b(gimme|give me|tell me|what'?s|whats)\b.*\banswer\b|\banswer\b.*\b(pls|plz|please|now)\b|just tell me/i;
+const MATHY = /\d|[=+\-*/^×÷]|\b(add|subtract|minus|plus|times|divide|multiply|sides?|undo|move|equation|solve|step|number|answer|x|first|then|get)\b/i;
+
+export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 700, nextMs: 1500, closeMs: 4000 };
 
 // Plays the role of Platy's server, in the browser, from a fixed script. Nothing the child
 // types is stored: it is read once to pick the scripted reply and then dropped (P-1). The one
@@ -51,6 +57,12 @@ export class MockTransport implements TutorTransport {
   private misses = 0;
   private hintsUsed = 0;
   private awaitingWhy = false;
+  /** Right-but-incomplete answers on this problem; a clean first try has none (R-06). */
+  private partials = 0;
+  /** Problems solved with no miss and no partial, for the map's closing line. */
+  private firstTry = 0;
+  /** The one warm redirect for an off-topic message on this problem has been said. */
+  private redirected = false;
   private paused = false;
   private pivoted = false;
   private solved = 0;
@@ -168,8 +180,7 @@ export class MockTransport implements TutorTransport {
     const p = this.current;
     switch (event.type) {
       case "end_session":
-        this.out({ type: "session_end", solved: this.solved, map: this.primer.report() });
-        this.closed = true;
+        this.end();
         return;
       case "resume":
         if (!this.paused) return;
@@ -216,7 +227,7 @@ export class MockTransport implements TutorTransport {
     if (this.awaitingWhy) {
       this.awaitingWhy = false;
       await this.say(p.afterWhy);
-    } else if (/just tell me|what'?s the answer|give me the answer|tell me the answer/i.test(text)) {
+    } else if (WANTS_ANSWER.test(text)) {
       await this.say(NO_ANSWERS);
     } else if (/\b(idk|i don'?t know|stuck|confused|hint|help)\b/i.test(text)) {
       await this.hint(p);
@@ -225,6 +236,10 @@ export class MockTransport implements TutorTransport {
       // step-by-step problem it belongs in the next line instead (R-39).
       if (p.format === "steps") await this.say(STEP_IN_LINES);
       else await this.answer(p, text);
+    } else if (!MATHY.test(text) && !this.redirected) {
+      // Off topic: one warm redirect, then the plain nudges (the real tutor's rule is R-39's).
+      this.redirected = true;
+      await this.say(OFF_TOPIC);
     } else {
       await this.say(NUDGES[this.nudge++ % NUDGES.length]!);
     }
@@ -251,13 +266,16 @@ export class MockTransport implements TutorTransport {
     this.primer.observe(p.skill_id, result === "correct");
     this.think(result === "correct" ? "accept_line" : "mark_line", result === "correct" ? "answer_right" : "answer_wrong", p.skill_id);
     if (result === "correct") {
-      this.solved++;
-      for (const line of p.correct) await this.say(line);
+      await this.solvedLines(p);
       await this.finishProblem();
       return;
     }
     if (result === "partial" && p.partial) {
-      await this.say(p.partial);
+      // Say the root they typed, not a fixed one (teen test 2026-10-26: "Yes, 7 works" to -7).
+      this.partials++;
+      const typed = readAnswer(text) ?? [];
+      const root = typed.find((v) => p.solutions.some((s) => Math.abs(s - v) < 1e-6)) ?? typed[0];
+      await this.say(p.partial.replace("{root}", String(root)));
       return;
     }
     this.misses++;
@@ -305,8 +323,7 @@ export class MockTransport implements TutorTransport {
         // The fresh problem after a repair is solved: the fix held.
         if (p.problem_id.startsWith("g")) this.primer.hypothesize("fix_holding", p.skill_id);
         this.think("accept_line", "solved", p.skill_id);
-        this.solved++;
-        for (const reply of p.correct) await this.say(reply);
+        await this.solvedLines(p);
         await this.finishProblem();
         return;
       case "unreadable":
@@ -393,9 +410,7 @@ export class MockTransport implements TutorTransport {
     const next = this.order[this.index];
     if (next) this.think("pose_problem", "path_next", next.skill_id);
     if (!next) {
-      await this.say(CLOSING);
-      this.out({ type: "session_end", solved: this.solved, map: this.primer.report() });
-      this.closed = true;
+      await this.closeSession();
       return;
     }
     // Hard reset at the end of a problem (R-17); the next problem starts on a clean page. The
@@ -413,6 +428,8 @@ export class MockTransport implements TutorTransport {
     this.current = p;
     this.stepLines = [];
     this.misses = 0;
+    this.partials = 0;
+    this.redirected = false;
     this.hintsUsed = 0;
     this.awaitingWhy = false;
     const lessonOnly = this.order.filter((q) => q !== CONFIDENCE_BUILDER);
@@ -542,7 +559,7 @@ export class MockTransport implements TutorTransport {
       const nudge = this.puzzleNudge;
       this.puzzleNudge = null;
       await this.say(nudge);
-    } else if (/just tell me|what'?s the answer|give me the answer|tell me the answer/i.test(text)) {
+    } else if (WANTS_ANSWER.test(text)) {
       // NO_ANSWERS offers a hint, which can't come before a first try (R-02).
       await this.say(live.tried ? NO_ANSWERS : NO_ANSWERS_TRY_FIRST);
     } else if (/\b(idk|i don'?t know|stuck|confused|hint|help)\b/i.test(text)) {
@@ -584,12 +601,35 @@ export class MockTransport implements TutorTransport {
     this.gap = null;
     const next = back ?? this.order[this.index];
     if (!next) {
-      await this.say(CLOSING);
-      this.out({ type: "session_end", solved: this.solved, map: this.primer.report() });
-      this.closed = true;
+      await this.closeSession();
       return;
     }
     await this.present(next, back ? [BACK_TO_IT] : next.intro);
+  }
+
+  /** The lines for a solved problem. The first-try line is true only on a clean first try (R-06). */
+  private async solvedLines(p: ScriptedProblem): Promise<void> {
+    this.solved++;
+    const clean = this.misses === 0 && this.partials === 0;
+    if (clean) this.firstTry++;
+    for (const line of p.correct) await this.say(line);
+    const extra = clean ? p.firstTry : p.afterMiss;
+    if (extra) await this.say(extra);
+  }
+
+  /**
+   * The closing line finishes before the map takes the screen (teen test 2026-10-26: it was cut
+   * off mid-sentence). The student taps See my map, or it comes by itself after `closeMs`.
+   */
+  private async closeSession(): Promise<void> {
+    await this.say(CLOSING);
+    if (this.timing.closeMs) this.offer(SEE_MAP, async () => this.end(), this.timing.closeMs);
+    else this.end();
+  }
+
+  private end(): void {
+    this.out({ type: "session_end", solved: this.solved, first_try: this.firstTry, map: this.primer.report() });
+    this.closed = true;
   }
 
   /** The primer's state after a move, for the demo primer view (R-42). Codes and numbers only. */
