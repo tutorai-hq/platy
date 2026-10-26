@@ -173,7 +173,7 @@ describe("spot the error grading", () => {
     play(p, { check: "found_error", line: 0 });
     play(p, { check: "fixed_step", text: `${a}x = ${c + b}` });
     const v = play(p, { check: "final_answer", text: `${a}x = ${c + b}` });
-    expect(v).toMatchObject({ outcome: "incorrect", ask: { ask: "That line's true. What's x on its own?" } });
+    expect(v).toMatchObject({ outcome: "incorrect", ask: { ask: "That line's true. What does x equal?" } });
     expect(play(p, { check: "final_answer", text: `${answer} = x` })).toMatchObject({ outcome: "correct", solved: true });
   });
 
@@ -304,7 +304,7 @@ describe("worked example", () => {
     const p = live("worked_example");
     const { a, b } = p.n;
     const at = (k: number) => p.n.order.indexOf(k);
-    expect(wire(p).why?.choices[at(0)]).toBe(`It undoes the $+ ${b}$, so $${a}x$ is left on its own.`);
+    expect(wire(p).why?.choices[at(0)]).toBe(`It undoes the $+ ${b}$, so only $${a}x$ is left.`);
     expect(play(p, { check: "why", choice: at(1) })?.ask?.ask).toContain(`$${a}x - ${b}$`);
     expect(play(p, { check: "why", choice: at(2) })).toMatchObject({ outcome: "incorrect", ask: { ask: expect.stringContaining("still there") } });
     // The browser's moves aren't trusted: a choice that isn't on screen isn't graded.
@@ -335,7 +335,7 @@ describe("worked example", () => {
     expect(play(p, { check: "first_step", text: `${a}x = ${c - b}` })).toBeNull();
     expect(play(p, { check: "final_answer", text: `x = ${c - b - a}` })?.ask?.ask).toContain("get rid of the");
     expect(play(p, { check: "final_answer", text: String(c - b - a) })?.ask?.ask).toContain("get rid of the");
-    expect(play(p, { check: "final_answer", text: `${a}x = ${c - b}` })?.ask?.ask).toBe("That line's true. What's x on its own?");
+    expect(play(p, { check: "final_answer", text: `${a}x = ${c - b}` })?.ask?.ask).toBe("That line's true. What does x equal?");
     const done = play(p, { check: "final_answer", text: `x = ${answer}` });
     expect(done).toMatchObject({ outcome: "correct", solved: true });
     expect(done?.reply).toContain(`$x = ${answer}$`);
@@ -393,7 +393,7 @@ describe("repair items", () => {
       const p = repair<"missing_step">("repair-two-step-coefficient");
       const { a, b, c, answer } = p.n;
       expect(play(p, { check: "missing_line", text: `x = ${c - b - a}` })?.ask?.ask).toContain(`get rid of the $${a}$`);
-      expect(play(p, { check: "missing_line", text: `${a}x = ${c - b}` })?.ask?.ask).toContain("What's x on its own?");
+      expect(play(p, { check: "missing_line", text: `${a}x = ${c - b}` })?.ask?.ask).toContain("What does x equal?");
       expect(play(p, { check: "missing_line", text: `x = ${answer}` })).toMatchObject({ outcome: "correct", solved: true });
     });
 

@@ -11,6 +11,8 @@ const BANNED = [
   "fresh page", "all yours", "you've got this", "stuck with", "fills in", "groove", "hunch", "stubborn",
   "hand it over", "give it a go", "right here", "makes it stick", "fix sticks", "so close", "nail it",
   "piece of cake", "hang in", "way to go", "walking me through", "get the hang",
+  // The re-run (Marcus, a second-language reader) added these.
+  "on its own", "underneath", "further down", "take it over", "what counts",
 ];
 const PRAISE = ["good thinking", "i like", "great", "nice", "smart", "clever", "love"];
 

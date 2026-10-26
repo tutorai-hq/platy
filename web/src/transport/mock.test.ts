@@ -413,7 +413,7 @@ describe("MockTransport", () => {
       await h.send({ type: "answer", problem_id: "p3", text: "7" });
       mark = h.events.length;
       await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
-      expect(h.said(mark).join(" ")).toContain("That's both roots");
+      expect(h.said(mark).join(" ")).toContain("That's both answers");
       expect(h.said(mark).join(" ")).not.toContain("You didn't");
       expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3, first_try: 2 });
     });
@@ -745,7 +745,7 @@ describe("MockTransport", () => {
       await h.settle();
       const mark = h.events.length;
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
-      expect(h.said(mark).join(" ")).toContain("one quick check on something underneath");
+      expect(h.said(mark).join(" ")).toContain("one quick check on a skill it uses");
       expect(after(h, mark).at(-1)).toEqual({ type: "next_up", label: "Quick check" });
       // Nothing changes on screen until the tap: the marked line and its words stay.
       expect(after(h, mark).some((e) => e.type === "reset" || e.type === "problem")).toBe(false);

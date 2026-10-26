@@ -147,13 +147,13 @@ export const LESSON: ScriptedProblem[] = [
     askWhy: "Not quite. What does $x^2$ mean to you?",
     afterWhy: "$x^2$ means $x \\cdot x$. Which number times itself is $49$?",
     secondMiss: "Think of the times tables: which number times itself makes $49$?",
-    partial: "Yes, ${root}$ works. Which other number squares to $49$?",
+    partial: "Yes, ${root}$ works. Which other number, times itself, makes $49$?",
     misconceptions: [
       { value: 24.5, reply: "Careful: $x^2$ means $x \\cdot x$, not $2 \\cdot x$." },
     ],
     correct: ["Both! $x = 7$ or $x = -7$, because $(-7)^2 = 49$ too."],
     firstTry: "Lots of people miss the negative one. You didn't.",
-    afterMiss: "That's both roots.",
+    afterMiss: "That's both answers.",
   },
 ];
 
@@ -173,7 +173,7 @@ export const CONFIDENCE_BUILDER: ScriptedProblem = {
   correct: ["Yes, $x = 5$. Now back to the one from before."],
 };
 
-export const CLOSING = "That's all of them. You kept going to the end, and that's what counts.";
+export const CLOSING = "That's all of them. You kept going to the end, and that matters most.";
 /** The button after the closing line; the map waits for it, or comes by itself after a moment. */
 export const SEE_MAP = "See my map";
 
@@ -199,7 +199,7 @@ export const TAKE_A_BREATH = "This one's hard. Let's pause for a moment.";
 export const REPAIR_LEAD =
   "I think I know what happened there. Let's look at someone else's work first, then come back to this one.";
 export const DEMO_LEAD = "Let's try a quick puzzle.";
-export const SHOW_ONE = "Let me show you one first. Then you'll take it over, a step at a time.";
+export const SHOW_ONE = "Let me show you one first. Then you do the steps, one at a time.";
 export const TRY_FIRST = "Try once first, even a guess. Then I'll help.";
 export const EXPLAIN_FIRST = "Tell me what you were thinking first, then I'll help.";
 export const NO_ANSWERS_TRY_FIRST =
@@ -246,8 +246,8 @@ export const SAFETY_RESOURCES: SafetyResource[] = [
 
 // Probing (R-01): before teaching a miss, the primer checks the prerequisite one level down,
 // then one more, with the skill map's own probes. A probe has no hints of its own.
-export const PROBE_LEAD = "Before we fix that line, one quick check on something underneath it.";
-export const PROBE_DEEPER = "One more quick check, a level further down.";
+export const PROBE_LEAD = "Before we fix that line, one quick check on a skill it uses.";
+export const PROBE_DEEPER = "One more quick check, on an even simpler skill.";
 /** Said on the quick check itself, after the new page. */
 export const PROBE_ASK = "Just your best try.";
 

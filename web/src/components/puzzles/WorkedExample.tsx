@@ -125,7 +125,7 @@ export function WorkedExample({ state, onMove, actions }: Props) {
       {stage === "final_answer" && (
         <LineEntry
           id="last-step"
-          prompt="Write the last line, with x on its own."
+          prompt="Write the last line, with x alone on one side."
           placeholder="Your last line"
           button="Check my line"
           busy={busy}

@@ -211,7 +211,7 @@
       "node": "two_step_equations",
       "name": "Moved the added or subtracted number without undoing it",
       "rule": "a times x plus b equals c, and the student wrote a times x, or x alone, equal to what b applied to c again (c + b) gives instead of undoing it.",
-      "hint": "Moving a number to the other side means undoing it. Check whether your line adds or takes away the way it should.",
+      "hint": "To move the number, undo it: take away what was added, or add back what was taken away. Check which one your line did.",
       "repair": "lin2-undo-sign-spot-error",
       "examples": [
         { "prev": "2x + 5 = 17", "next": "2x = 22" },

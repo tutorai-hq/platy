@@ -113,7 +113,7 @@ const watch: Item = {
       nudge: "What has to happen to the ${b}$ before you can divide?",
     },
     not_alone: {
-      ask: "That line's true. What's x on its own?",
+      ask: "That line's true. What does x equal?",
       nudge: "What's still being done to $x$ in that line?",
     },
     subtracted_a: {
@@ -174,7 +174,7 @@ export const ITEMS: Record<PuzzleTemplate, Item> = {
         nudge: "What's still being done to $x$ in your fixed line?",
       },
       not_alone: {
-        ask: "That line's true. What's x on its own?",
+        ask: "That line's true. What does x equal?",
         nudge: "What's still being done to $x$ in that line?",
       },
     },
@@ -259,7 +259,7 @@ export const REPAIRS: Record<string, Item> = {
     template: "missing_step",
     skill_id: "two_step_equations",
     intro: "{player} from the {team} got halfway through this one. Can you finish it?",
-    instructions: "Line 1 is right. Write the last line, with x on its own.",
+    instructions: "Line 1 is right. Write the last line, with x alone on one side.",
     hints: [
       "In line 1, what's being done to $x$?",
       "${a}x$ means ${a}$ times x. What undoes times?",
@@ -274,7 +274,7 @@ export const REPAIRS: Record<string, Item> = {
         nudge: "${a}x$ means ${a}$ times x. Does taking ${a}$ away undo times?",
       },
       not_alone: {
-        ask: "That line's true. What's x on its own?",
+        ask: "That line's true. What does x equal?",
         nudge: "What's still being done to $x$ in that line?",
       },
       final_other: {
@@ -401,7 +401,7 @@ export const WALKTHROUGH: { reasons: string[]; why: string; choices: { text: str
   why: "Why does {player} subtract ${b}$ first?",
   // The right reason, then two wrong ones the tutor asks back about. The instance shuffles them.
   choices: [
-    { text: "It undoes the $+ {b}$, so ${a}x$ is left on its own.", ask: null },
+    { text: "It undoes the $+ {b}$, so only ${a}x$ is left.", ask: null },
     { text: "You always subtract before you divide.", ask: "always_subtract" },
     { text: "It gets rid of the ${a}$ in front of $x$.", ask: "wrong_part" },
   ],
