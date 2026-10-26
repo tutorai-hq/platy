@@ -7,6 +7,7 @@ import { PrimerPanel } from "./components/PrimerPanel";
 import { ProblemCard } from "./components/ProblemCard";
 import { PuzzlePlayer } from "./components/PuzzlePlayer";
 import { StepSolver } from "./components/StepSolver";
+import { YourMap } from "./components/YourMap";
 import { useTutorSession } from "./session/useTutorSession";
 import type { DemoTrigger } from "./transport/types";
 
@@ -107,7 +108,22 @@ export function App() {
             </main>
           )}
 
-          {phase === "ended" && (
+          {phase === "ended" && s.state.map && (
+            <main className="screen screen--map">
+              <div className="screen__inner">
+                <h1>Your map</h1>
+                <p>
+                  You solved {s.state.solved} {s.state.solved === 1 ? "problem" : "problems"} today.
+                </p>
+                <YourMap report={s.state.map} />
+                <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
+                  Practice again
+                </button>
+              </div>
+            </main>
+          )}
+
+          {phase === "ended" && !s.state.map && (
             <Screen title="Nice session!" mascot="happy">
               <p>
                 You solved {s.state.solved} {s.state.solved === 1 ? "problem" : "problems"} today.

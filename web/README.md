@@ -81,6 +81,15 @@ by" screen, which holds until you reload the page.
    on that one move, then a fresh generated problem confirms the fix. A right answer on a probe
    ends the probing early and goes back to the problem.
 
+11. **"Your map" (R-13).** **End session** (or the end of the lesson) shows the whole skill map,
+   drawn from `skill_map.json`. Today's skills fill in one by one, foundations first, then the next
+   skill gets its moment: "Unlocked today" when today's work opened it (solve `2x + 5 = 17`
+   cleanly, then end the session: multi-step equations unlocks), or "Next to unlock" when it's one
+   step away. Skills due for review are marked, and one line of encouragement about effort comes
+   from `src/content/map.json`. Long prerequisite lines run along the gaps between rows, so no line
+   passes under a box. On a phone the map scrolls sideways, starting at today's work but far enough
+   along to show the next skill. Nothing is saved; the next session starts without it.
+
 The dashed **Demo** button (mock only) jumps to any screen on cue: skip a problem, each of the
 three puzzles (spot the error, missing step, balance scale), the worked example, the pause screen, the
 safety-resources panel (R-22) and the dropped-connection screen (P-3). **Switch interest**
@@ -163,6 +172,14 @@ into words from `src/content/primer.json` and shows nothing for a code it doesn'
 text from the server and nothing the student wrote reaches the panel. In the mock,
 `src/mock/primer.ts` stands in for the primer with a small BKT update; the real numbers come from
 Connor's policy and pyBKT mastery (A-5).
+
+"Your map" (R-13, proposed) adds `map: [{skill_id, before, after, due}]` to `session_end`: each
+skill's mastery when the session started and when it ended, and whether the primer wants it
+reviewed soon. Numbers and skill ids only. The browser works out each skill's state from that
+report and the map's edges alone (`src/content/map.ts`): due for review whenever the primer says
+so (even when mastered), mastered at 0.8 or more, unlocked when every prerequisite is mastered,
+and next to unlock when its prerequisites are mastered or went up today, at least one of them
+today. A drop never makes a skill "next". Connor's policy would set the threshold and the "due" call from its forgetting model.
 
 `answer_result`, `instruction`/`position`/`total` on `problem`, and `resume` are additions to the
 plan's first draft; they let the problem card give feedback and show progress. Answers are sent

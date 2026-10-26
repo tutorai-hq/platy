@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "about": "Fixed words for the end-of-session map (R-13). The encouragement is about effort, never about being smart.",
+  "encouragement": {
+    "moved": "You stuck with the tricky parts today and practiced {n} skills. That's how a map fills in.",
+    "moved_one": "You stuck with the tricky part today and practiced a skill. That's how a map fills in.",
+    "none": "Showing up is the hard part, and you did it. Next time, these start to move."
+  }
+}

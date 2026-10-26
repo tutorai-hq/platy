@@ -353,3 +353,56 @@ button, input { font: inherit; color: inherit; }
 @media (max-width: 1100px) {
   .primer { display: none; }
 }
+
+/* "Your map" (R-13). Today's skills fill in one by one, foundations first, then the next skill
+   gets its moment. Every animation starts from the final state's opposite and ends on it, so with
+   reduced motion (animations off) the map simply shows where things ended up. */
+.screen--map { padding-top: 4px; grid-template-columns: minmax(0, 1fr); }
+.screen--map .screen__inner { max-width: 1340px; width: 100%; min-width: 0; gap: 10px; justify-self: center; }
+.map { width: 100%; min-width: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 14px; text-align: left; }
+.map .map__cheer { font-size: 1.1rem; color: var(--ink); text-align: center; }
+.map__scroll { overflow-x: auto; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+.map__svg { display: block; width: 100%; height: auto; min-width: 900px; }
+.map__edge { fill: none; stroke: var(--line); stroke-width: 2; }
+.map__edge--lit { stroke: var(--river); stroke-width: 2.5; }
+
+.map-node__box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+.map-node__name { font-size: 12.5px; font-weight: 700; fill: var(--ink); }
+.map-node__tag, .map-node__delta { font-size: 11px; font-weight: 700; fill: var(--ink-soft); }
+.map-node__track { fill: var(--paper); }
+.map-node__fill {
+  fill: var(--river); transform-box: fill-box; transform-origin: left;
+  transform: scaleX(var(--to));
+}
+.map-node--locked .map-node__box { stroke-dasharray: 5 4; fill: var(--paper); }
+.map-node--locked .map-node__name, .map-node--open .map-node__name { fill: var(--ink-soft); font-weight: 400; }
+.map-node--mastered .map-node__box { fill: var(--river-wash); stroke: var(--river); }
+.map-node--mastered .map-node__fill { fill: var(--river-deep); }
+.map-node--learning .map-node__box { stroke: var(--river); stroke-width: 2.5; }
+.map-node--due .map-node__box { stroke: var(--warm); fill: var(--warm-wash); }
+.map-node--due .map-node__tag { fill: var(--warm); }
+.map-node--next .map-node__box, .map-node--unlocked_today .map-node__box {
+  stroke: var(--good); stroke-width: 2.5; stroke-dasharray: 6 4; fill: var(--good-wash);
+}
+.map-node--unlocked_today .map-node__box { stroke-dasharray: none; }
+.map-node--next .map-node__tag, .map-node--unlocked_today .map-node__tag { fill: var(--good); }
+.map-node--moved .map-node__delta { fill: var(--river-deep); }
+
+.map-node--gained .map-node__fill { animation: map-fill 900ms cubic-bezier(0.22, 1, 0.36, 1) var(--delay) both; }
+.map-node--moved .map-node__box { animation: map-light 900ms ease-out var(--delay) both; }
+.map-node--next, .map-node--unlocked_today { animation: map-unlock 700ms cubic-bezier(0.34, 1.4, 0.64, 1) var(--delay) both; transform-box: fill-box; }
+@keyframes map-fill { from { transform: scaleX(var(--from)); } to { transform: scaleX(var(--to)); } }
+@keyframes map-light { from { stroke: var(--line); } }
+@keyframes map-unlock { from { opacity: 0; } 60% { opacity: 1; } to { opacity: 1; } }
+
+.map__legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; font-size: 0.85rem; color: var(--ink-soft); }
+.map__key { display: inline-flex; align-items: center; gap: 6px; }
+.map__key::before { content: ""; width: 18px; height: 12px; border-radius: 4px; border: 2px solid; }
+.map__key--moved::before { border-color: var(--river); background: var(--card); }
+.map__key--mastered::before { border-color: var(--river); background: var(--river-wash); }
+
+@media (max-width: 820px) {
+  .map__scroll { padding: 10px; }
+  .map__svg { min-width: 1150px; }
+  .map .map__cheer { font-size: 1rem; }
+}

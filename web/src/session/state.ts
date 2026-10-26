@@ -1,7 +1,7 @@
 import { applyMove } from "../content/balance";
 import { balanceStage, missingStage, type Outcomes, spotStage, workedStage } from "../content/progress";
 import type { CheckId, CheckOutcome, Pans, Puzzle, PuzzleMove } from "../content/types";
-import type { PrimerState, Problem, SafetyResource, ServerEvent, StepResult } from "../protocol";
+import type { PrimerState, Problem, SafetyResource, ServerEvent, SkillReport, StepResult } from "../protocol";
 
 // Everything here lives in React state only. Child content is never written to browser
 // storage, cookies, the URL or a log (P-1, P-10), and it is dropped on a reset or when
@@ -74,6 +74,8 @@ export interface SessionState {
    * it's the primer's view of the session, and goes when the session ends.
    */
   primer: PrimerView | null;
+  /** The session's mastery report for "Your map" (R-13), once it ends. Dropped at the next start. */
+  map: SkillReport[] | null;
 }
 
 export interface PrimerView {
@@ -99,6 +101,7 @@ export const initialState: SessionState = {
   errorCode: null,
   solved: 0,
   primer: null,
+  map: null,
 };
 
 export type Action =
@@ -224,7 +227,7 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
     case "error":
       return { ...initialState, phase: "error", errorCode: event.code };
     case "session_end":
-      return { ...initialState, phase: "ended", solved: event.solved };
+      return { ...initialState, phase: "ended", solved: event.solved, map: event.map ?? null };
   }
 }
 

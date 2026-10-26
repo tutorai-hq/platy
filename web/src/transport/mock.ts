@@ -153,7 +153,7 @@ export class MockTransport implements TutorTransport {
     const p = this.current;
     switch (event.type) {
       case "end_session":
-        this.out({ type: "session_end", solved: this.solved });
+        this.out({ type: "session_end", solved: this.solved, map: this.primer.report() });
         this.closed = true;
         return;
       case "resume":
@@ -367,7 +367,7 @@ export class MockTransport implements TutorTransport {
     if (next) this.think("pose_problem", "path_next", next.skill_id);
     if (!next) {
       await this.say(CLOSING);
-      this.out({ type: "session_end", solved: this.solved });
+      this.out({ type: "session_end", solved: this.solved, map: this.primer.report() });
       this.closed = true;
       return;
     }
@@ -539,7 +539,7 @@ export class MockTransport implements TutorTransport {
     const next = back ?? this.order[this.index];
     if (!next) {
       await this.say(CLOSING);
-      this.out({ type: "session_end", solved: this.solved });
+      this.out({ type: "session_end", solved: this.solved, map: this.primer.report() });
       this.closed = true;
       return;
     }

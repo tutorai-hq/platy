@@ -43,6 +43,18 @@ export interface PrimerState {
   move: { code: string; reason: string; skill_id: string };
 }
 
+/**
+ * One skill's mastery over the session, for "Your map" at the end (R-13). Numbers and a skill id
+ * only. `due` is the primer's call that the skill needs review soon. Proposed for Connor.
+ */
+export interface SkillReport {
+  skill_id: string;
+  /** P(mastered), 0 to 1, when the session started and when it ended. */
+  before: number;
+  after: number;
+  due: boolean;
+}
+
 export interface SafetyResource {
   name: string;
   contact: string;
@@ -68,7 +80,8 @@ export type ServerEvent =
   | { type: "safety_escalation"; resources: SafetyResource[] }
   /** Fail closed (P-3): the session is over, show a calm error. */
   | { type: "error"; code: string }
-  | { type: "session_end"; solved: number }
+  /** `map` is every skill's mastery over the session, for "Your map" (R-13). */
+  | { type: "session_end"; solved: number; map?: SkillReport[] }
   /**
    * Content (R-37). A puzzle replaces the problem card until puzzle_done. A second puzzle
    * event with the same instance_id only changes its look (a new skin), not its progress.

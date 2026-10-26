@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PuzzleMove } from "../content/types";
 import type { ClientEvent, PrimerState, ServerEvent } from "../protocol";
+import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { EXPLAIN_FIRST, LESSON, STEP_LESSON } from "../mock/script";
@@ -107,7 +108,7 @@ describe("MockTransport", () => {
     await h.send({ type: "answer", problem_id: "p3", text: "7" });
     expect(h.said(mark).join(" ")).toContain("one more number");
     await h.send({ type: "answer", problem_id: "p3", text: "7 or -7" });
-    expect(h.events.at(-1)).toEqual({ type: "session_end", solved: 3 });
+    expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3 });
   });
 
   describe("puzzles (R-37)", () => {
@@ -624,6 +625,21 @@ describe("MockTransport", () => {
         expect(h.problems().at(-1), leave).toBe("s1");
         expect(primerStates(h).at(-1)?.hypothesis, leave).toBeNull();
       }
+    });
+
+    it("ends with every skill's mastery for Your map, numbers only (R-13)", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.send({ type: "end_session" });
+      const end = h.events.at(-1);
+      if (end?.type !== "session_end" || !end.map) throw new Error("expected a map");
+      expect(end.map.map((s) => s.skill_id).sort()).toEqual(skillMap.nodes.map((n) => n.id).sort());
+      const one = end.map.find((s) => s.skill_id === "one_step_equations")!;
+      expect(one.after).toBeLessThan(one.before);
+      expect(end.map.find((s) => s.skill_id === "order_of_operations")?.due).toBe(true);
+      expect(end.map.find((s) => s.skill_id === "multi_step_equations")).toMatchObject({ before: 0.1, after: 0.1, due: false });
     });
 
     it("sends only codes from the text table, known skills and numbers, never what the student wrote", async () => {
