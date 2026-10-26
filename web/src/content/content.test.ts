@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { applyMove, isSolved, pansLatex } from "./balance";
 import { contrast, PALETTE } from "./palette";
 import { balanceStage, missingStage, spotStage, workedStage } from "./progress";
-import type { Pans, WorkedExamplePuzzle } from "./types";
+import type { Pans, PuzzleMove, WorkedExamplePuzzle } from "./types";
+import { LEVELS, seeded } from "../mock/generate";
+import { gradeMove, itemFor, type LivePuzzle, newItemPuzzle, SKINS } from "../mock/puzzles";
+import { REPAIRS_TO_BUILD, SLIPS } from "./slips";
 
 type Shape = Pick<WorkedExamplePuzzle, "steps" | "why">;
 
@@ -102,5 +105,62 @@ describe("puzzle progress", () => {
     expect(workedStage(solo, { first_step: "incorrect" })).toBe("first_step");
     expect(workedStage(solo, { first_step: "correct" })).toBe("final_answer");
     expect(workedStage(solo, { first_step: "correct", final_answer: "correct" })).toBe("done");
+  });
+});
+
+// R-37: every repair item a slip points at (R-40) exists, or is listed to build, and its checks
+// verify: the right moves, graded the way the server grades them, solve it.
+describe("repair items", () => {
+  const solve = (p: LivePuzzle): boolean => {
+    const moves: PuzzleMove[] = (() => {
+      switch (p.template) {
+        case "spot_the_error":
+          return [{ check: "found_error", line: 0 }, { check: "fixed_step", text: p.n.fix }, { check: "final_answer", text: `x = ${p.n.answer}` }];
+        case "missing_step":
+          return [{ check: "missing_line", text: p.n.expected }];
+        case "balance": {
+          const { left } = p.n.start;
+          const out: PuzzleMove[] = [];
+          if (left.units > 0) out.push({ check: "move", move: { op: "remove_units", n: left.units } });
+          if (left.x > 1) out.push({ check: "move", move: { op: "split", groups: left.x } });
+          return out;
+        }
+        case "worked_example":
+          return [{ check: "why", choice: p.n.order.indexOf(0) }];
+      }
+    })();
+    let solved = false;
+    for (const move of moves) {
+      const v = gradeMove(p, move, SKINS.neutral);
+      if (v?.outcome !== "correct") return false;
+      p.outcomes[v.check] = v.outcome;
+      if (v.pans && p.template === "balance") p.pans = v.pans;
+      solved = v.solved;
+    }
+    return solved;
+  };
+
+  it("resolves every repair id in the slip map to an item whose checks verify, or lists it to build", () => {
+    const repairs = new Set(SLIPS.map((s) => s.repair));
+    for (const id of repairs) {
+      if (REPAIRS_TO_BUILD.has(id)) {
+        expect(itemFor(id), id).toBeNull();
+        continue;
+      }
+      expect(itemFor(id), id).not.toBeNull();
+      for (const level of LEVELS) {
+        for (let seed = 1; seed <= 50; seed++) {
+          const p = newItemPuzzle(id, seeded(seed), `${id}-${seed}`, level);
+          expect(p.item.item_id).toBe(id);
+          expect(solve(p), `${id} L${level} seed ${seed}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("has a repair item for every inverse operations and two-step slip", () => {
+    for (const s of SLIPS.filter((x) => x.node === "inverse_operations" || x.node === "two_step_equations")) {
+      expect(itemFor(s.repair), s.id).not.toBeNull();
+    }
   });
 });

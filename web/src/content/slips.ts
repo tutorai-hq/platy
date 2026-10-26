@@ -47,3 +47,7 @@ const BY_ID = new Map(SLIPS.map((s) => [s.id, s]));
 export function slipHint(id: string): string | null {
   return BY_ID.get(id)?.hint ?? null;
 }
+
+export function slipRepair(id: string): string | null {
+  return BY_ID.get(id)?.repair ?? null;
+}

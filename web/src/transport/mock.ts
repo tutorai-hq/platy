@@ -1,15 +1,17 @@
 import type { PaletteId, PuzzleMove, PuzzleTemplate } from "../content/types";
 import { checkAnswer, matchesValue, readAnswer } from "../mock/answers";
-import { seeded } from "../mock/generate";
+import { slipRepair } from "../content/slips";
+import { DEMO_NODES, type DemoNode, isOneOf, type Level, problemSession, seeded } from "../mock/generate";
 import { detectSlip } from "../mock/slips";
 import { checkStep } from "../mock/steps";
 import {
-  type Fade, gradeMove, INTERESTS, type Interest, type LivePuzzle, line, newPuzzle, nextHint, skinFor, toWire,
+  type Fade, gradeMove, INTERESTS, type Interest, itemFor, type LivePuzzle, line, newItemPuzzle, newPuzzle, nextHint, skinFor,
+  toWire,
 } from "../mock/puzzles";
 import {
-  BACK_TO_IT, CLOSING, CONFIDENCE_BUILDER, DEMO_LEAD, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
+  BACK_TO_IT, CLOSING, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OPENING,
   OUT_OF_HINTS, PUZZLE_NUDGE, PUZZLE_UNREADABLE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SHOW_ONE, STEP_IN_LINES,
-  STEP_LESSON, STEP_UNREADABLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
+  STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
 } from "../mock/script";
 import type { ClientEvent, ServerEvent, SessionMode } from "../protocol";
 import type { DemoTrigger, TutorTransport } from "./types";
@@ -59,6 +61,14 @@ export class MockTransport implements TutorTransport {
   private puzzleNudge: string | null = null;
   private reflecting = false;
   private repaired = false;
+  /** The running puzzle repairs a step slip, so a fresh problem follows it. */
+  private confirm = false;
+
+  // Generated problems (R-41): seeded, never repeated in the session. The primer would set the
+  // level from mastery; the demo stays at level 1.
+  private readonly level: Level = 1;
+  private readonly problems: ReturnType<typeof problemSession>;
+  private generated = 0;
 
   constructor(
     private readonly timing: MockTiming = DEMO_TIMING,
@@ -66,6 +76,7 @@ export class MockTransport implements TutorTransport {
     lesson: ScriptedProblem[] = [...STEP_LESSON, ...LESSON],
   ) {
     this.order = [...lesson];
+    this.problems = problemSession(seed);
   }
 
   async start(_mode: SessionMode, onEvent: (event: ServerEvent) => void): Promise<void> {
@@ -258,9 +269,16 @@ export class MockTransport implements TutorTransport {
       case "unreadable":
         await this.say(STEP_UNREADABLE);
         return;
-      case "invalid":
+      case "invalid": {
         this.misses++;
-        if (this.misses >= 3 && !this.pivoted) {
+        const repair = slip ? slipRepair(slip) : null;
+        const item = repair ? itemFor(repair) : null;
+        if (item && !this.repaired) {
+          // A slip with a repair puzzle: work on that move there first, then a fresh problem (R-37).
+          this.repaired = true;
+          this.confirm = true;
+          await this.startPuzzle(item.template, STEP_REPAIR_LEAD, item.item_id);
+        } else if (this.misses >= 3 && !this.pivoted) {
           await this.suggestPause(); // R-21, as for a problem's answers
         } else if (this.misses === 1) {
           // The mark is on the line; the tutor asks first and never writes the line (R-02, R-03).
@@ -269,6 +287,7 @@ export class MockTransport implements TutorTransport {
         } else {
           await this.say(p.secondMiss);
         }
+      }
     }
   }
 
@@ -282,8 +301,14 @@ export class MockTransport implements TutorTransport {
     this.pivoted = true;
     // The reset below clears any puzzle on screen, so drop it here too. The lesson picks up
     // where it was after the warm-up.
+    // A pause during a repair still never goes back to the problem they slipped on: the repair
+    // may have walked through its steps (R-02). The fresh problem waits after the warm-up.
+    if (this.confirm && this.returnTo) {
+      this.order.splice(this.index, 1, this.freshProblem(this.returnTo, this.puzzle));
+    }
     this.puzzle = null;
     this.returnTo = null;
+    this.confirm = false;
     this.reflecting = false;
     this.puzzleNudge = null;
     this.stepLines = [];
@@ -339,7 +364,8 @@ export class MockTransport implements TutorTransport {
     return skinFor(this.interest, this.colors);
   }
 
-  private async startPuzzle(template: PuzzleTemplate, lead: string): Promise<void> {
+  /** `item` picks a specific item, such as a slip's repair; otherwise the template's own. */
+  private async startPuzzle(template: PuzzleTemplate, lead: string, item?: string): Promise<void> {
     if (!this.puzzle) this.returnTo = this.current;
     this.current = null;
     this.stepLines = []; // the reset below clears them from the screen too
@@ -350,12 +376,14 @@ export class MockTransport implements TutorTransport {
     this.out({ type: "topic_switch", label: template === "worked_example" ? "Worked example" : "Quick puzzle" });
     this.out({ type: "reset", reason: "topic_switch" });
     await this.sleep(this.timing.resetMs);
-    await this.showPuzzle(template);
+    await this.showPuzzle(template, 0, item);
   }
 
-  private async showPuzzle(template: PuzzleTemplate, fade: Fade = 0): Promise<void> {
+  private async showPuzzle(template: PuzzleTemplate, fade: Fade = 0, item?: string): Promise<void> {
     this.puzzles++;
-    const live = newPuzzle(template, seeded(this.seed + this.puzzles), `${template}-${this.puzzles}`, fade);
+    const rng = seeded(this.seed + this.puzzles);
+    const id = `${template}-${this.puzzles}`;
+    const live = item ? newItemPuzzle(item, rng, id, this.level, this.lessonPrompts()) : newPuzzle(template, rng, id, fade);
     this.puzzle = live;
     await this.say(line(live, this.skin(), (i) => i.intro));
     this.out({ type: "puzzle", puzzle: toWire(live, this.skin()) });
@@ -455,6 +483,14 @@ export class MockTransport implements TutorTransport {
     }
     const back = this.returnTo;
     this.returnTo = null;
+    if (this.confirm && back) {
+      // The fresh problem takes the place of the one they slipped on (R-41).
+      this.confirm = false;
+      const fresh = this.freshProblem(back, live);
+      this.order.splice(this.index, 1, fresh);
+      await this.present(fresh);
+      return;
+    }
     const next = back ?? this.order[this.index];
     if (!next) {
       await this.say(CLOSING);
@@ -463,6 +499,22 @@ export class MockTransport implements TutorTransport {
       return;
     }
     await this.present(next, back ? [BACK_TO_IT] : next.intro);
+  }
+
+  private lessonPrompts(): string[] {
+    return this.order.map((p) => p.prompt);
+  }
+
+  /**
+   * A generated problem of the same kind as `p`, as a step-by-step problem. It's never a problem
+   * in the lesson or the repair puzzle just shown, so it really is fresh.
+   */
+  private freshProblem(p: ScriptedProblem, repair: LivePuzzle | null): ScriptedProblem {
+    const node: DemoNode = DEMO_NODES.find((n) => n === p.skill_id) ?? "two_step_equations";
+    const avoid = [...this.lessonPrompts(), ...(repair ? [repair.n.latex] : [])];
+    let g = this.problems.next(node, this.level);
+    while (isOneOf(g.prompt, avoid)) g = this.problems.next(node, this.level);
+    return confirmProblem(`g${++this.generated}`, node, g.prompt, g.answer, g.answerText);
   }
 
   private async say(text: string): Promise<void> {

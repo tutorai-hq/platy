@@ -2,7 +2,7 @@ import type { Pans } from "../content/types";
 import { evaluate } from "../math/evaluate";
 import { parseMathStrict } from "../math/parse";
 import { readAnswer } from "./answers";
-import { hasSolution, linearForm, near } from "./grade";
+import { hasSolution, linearForm, near, sides } from "./grade";
 import { slipValues } from "./slips";
 
 // Mock-only problem generators for the puzzle templates. They follow each item's
@@ -85,6 +85,8 @@ export interface MissingInstance extends Numbers {
   /** The blanked line, and the line the slip of adding b would give. */
   expected: string;
   slip: string;
+  /** "last": the first step is shown and the last line is blank (a repair item's variant). */
+  blank?: "last";
 }
 
 export function missingStep(rng: Rng): MissingInstance {
@@ -440,4 +442,68 @@ export function problemSession(seed: number): { next: (node: DemoNode, level: Le
       return finish(node, level, d);
     },
   };
+}
+
+// Repair puzzles (R-37) take their numbers from the generators above, at the student's level,
+// and never use a problem in the student's lesson (`avoid`), so they can't give its answer.
+
+/** a, b and c of a linear equation "ax + b = c", or null for anything else. */
+function equationOf(text: string): Omit<Numbers, "answer"> | null {
+  const s = sides(text);
+  return s && near(s[1].slope, 0) ? { a: s[0].slope, b: s[0].constant, c: s[1].constant } : null;
+}
+
+/** True when `text` is the same equation as one of `others`, however each is written. */
+export function isOneOf(text: string, others: readonly string[]): boolean {
+  const e = equationOf(text);
+  return (
+    e !== null &&
+    others.some((o) => {
+      const f = equationOf(o);
+      return f !== null && near(f.a, e.a) && near(f.b, e.b) && near(f.c, e.c);
+    })
+  );
+}
+
+/** a, b and c of a generated "ax + b = c", "x + b = c" or "ax = c". */
+function numbersOf(p: GeneratedProblem): Numbers {
+  const [l, r] = sides(p.prompt)!;
+  return { a: l.slope, b: l.constant, c: r.constant, answer: p.answer };
+}
+
+/** A two-step problem with its first step shown and the last line left for the student. */
+export function lastStep(rng: Rng, level: Level, avoid: readonly string[] = []): MissingInstance {
+  // Level 3's fraction answers are for solving, not for this one move, so it caps at 2.
+  const at: Level = level === 3 ? 2 : level;
+  return draw(rng, (r) => {
+    const p = makeProblem("two_step_equations", at, r);
+    const { a, b, c, answer } = numbersOf(p);
+    // No number on screen is the answer (b shows without its sign), and the slip lands elsewhere.
+    if (isOneOf(p.prompt, avoid) || [a, Math.abs(b), c, c - b, c - b - a].includes(answer)) return null;
+    return {
+      a, b, c, answer,
+      equation: p.prompt,
+      latex: p.prompt,
+      linesLatex: [`${a}x = ${c - b}`, null],
+      expected: `x = ${answer}`,
+      slip: `x = ${c - b - a}`,
+      blank: "last",
+    };
+  });
+}
+
+/**
+ * A balance scale from a level 1 one-step problem: "x + b = c" (take the units off) or "ax = c"
+ * (split). The scale draws every unit, so the numbers stay small and positive at any level.
+ */
+export function oneStepBalance(rng: Rng, kind: "shift" | "split", avoid: readonly string[] = []): BalanceInstance {
+  return draw(rng, (r) => {
+    const p = makeProblem("one_step_equations", 1, r);
+    const { a, b, c, answer } = numbersOf(p);
+    // As in balance(), the answer is never the number already on the scale's left.
+    const fits =
+      kind === "shift" ? near(a, 1) && b > 0 && answer !== b : Number.isInteger(a) && a > 1 && near(b, 0) && answer !== a;
+    if (!fits || c > 30 || isOneOf(p.prompt, avoid)) return null;
+    return { a, b, c, answer, latex: p.prompt, start: { left: { x: a, units: b }, right: { x: 0, units: c } } };
+  });
 }

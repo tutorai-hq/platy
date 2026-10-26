@@ -6,11 +6,8 @@
     "repair-integer-subtraction",
     "repair-order-precedence",
     "repair-order-brackets",
-    "repair-inverse-undo",
-    "repair-inverse-divide",
     "repair-one-step-direction",
-    "repair-one-step-coefficient",
-    "repair-two-step-coefficient"
+    "repair-one-step-coefficient"
   ],
   "slips": [
     {

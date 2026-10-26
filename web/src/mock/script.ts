@@ -198,6 +198,34 @@ export const PUZZLE_UNREADABLE = "I couldn't read that one. Write it as an equat
 export const PUZZLE_NUDGE = "Give it a go in the puzzle. I'm right here if you get stuck.";
 export const BACK_TO_IT = "Now back to the one from before. You've got this.";
 
+// A slip on a step-by-step problem (R-39, R-40): a repair puzzle on that one move, then a fresh
+// problem of the same kind to check the fix stuck (R-41), in place of the one they slipped on.
+export const STEP_REPAIR_LEAD = "I think I know what happened on that line. Let's try that one move in a quick puzzle first.";
+export const ONE_MORE = "Now a fresh one, to make sure the fix sticks. Same kind of problem, new numbers.";
+
+/** A generated problem (R-41) as a step-by-step problem, with lines that fit any numbers. */
+export function confirmProblem(problem_id: string, skill_id: string, prompt: string, solution: number, answerText: string): ScriptedProblem {
+  return {
+    problem_id,
+    skill_id,
+    prompt,
+    instruction: "Solve it one line at a time",
+    format: "steps",
+    solutions: [solution],
+    intro: [ONE_MORE],
+    hints: [
+      "What's being done to $x$, and in what order? Undo the last thing first.",
+      "Start with the number added to or taken from the $x$ part. What undoes it, on both sides?",
+      "Now $x$ is still multiplied by a number. What undoes that?",
+    ],
+    askWhy: "That line doesn't follow from the one above yet. What did you do to each side?",
+    afterWhy: "Thanks. Whatever you do to one side, do exactly the same to the other. Try that line again.",
+    secondMiss: "Look at the marked line next to the one above it. Which side changed in a different way?",
+    misconceptions: [],
+    correct: [`Yes! $x = ${answerText}$, and every line checks out. That fix stuck.`],
+  };
+}
+
 export const SAFETY_RESOURCES: SafetyResource[] = [
   { name: "A trusted adult", contact: "A parent, guardian, teacher or school counselor", description: "Someone you know who can help right now." },
   { name: "988 Suicide & Crisis Lifeline", contact: "Call or text 988 (US)", description: "Free and confidential, any time of day." },

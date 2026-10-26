@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { detectSlip } from "../mock/slips";
-import { ITEMS, WORKED_FADES } from "../mock/puzzles";
+import { itemFor } from "../mock/puzzles";
 import { REPAIRS_TO_BUILD, SLIPS, slipHint } from "./slips";
 
 // The demo path's skills (prompt 2's scope).
 const DEMO_NODES = ["integer_arithmetic", "inverse_operations", "one_step_equations", "two_step_equations", "order_of_operations"];
 
 const nodeIds = new Set(skillMap.nodes.map((n) => n.id));
-const itemIds = new Set([...Object.values(ITEMS), ...WORKED_FADES].map((i) => i.item_id));
 
 // R-40: every slip is detected on its own examples, leaves a correct step alone, and points
 // at a repair item.
@@ -79,11 +78,11 @@ describe("slip map (R-40)", () => {
   });
 
   it("points every slip at a repair item that exists or is listed to build", () => {
-    for (const s of SLIPS) expect(itemIds.has(s.repair) || REPAIRS_TO_BUILD.has(s.repair), s.id).toBe(true);
+    for (const s of SLIPS) expect(itemFor(s.repair) !== null || REPAIRS_TO_BUILD.has(s.repair), s.id).toBe(true);
     // The to-build list holds nothing that already exists, and nothing no slip needs.
     const used = new Set(SLIPS.map((s) => s.repair));
     for (const id of REPAIRS_TO_BUILD) {
-      expect(itemIds.has(id), id).toBe(false);
+      expect(itemFor(id), id).toBeNull();
       expect(used.has(id), id).toBe(true);
     }
   });

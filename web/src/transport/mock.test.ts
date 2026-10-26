@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PuzzleMove } from "../content/types";
 import type { ClientEvent, ServerEvent } from "../protocol";
+import { isOneOf } from "../mock/generate";
 import { EXPLAIN_FIRST, LESSON, STEP_LESSON } from "../mock/script";
 import { MockTransport } from "./mock";
 
@@ -8,9 +9,9 @@ const FAST = { thinkMs: 0, wordMs: 0, resetMs: 0 };
 
 // The answer-box lesson by default, so its problem ids stay p1 to p3; the demo itself opens
 // with STEP_LESSON (R-39).
-function harness(lesson = LESSON) {
+function harness(lesson = LESSON, seed?: number) {
   const events: ServerEvent[] = [];
-  const t = new MockTransport(FAST, undefined, lesson);
+  const t = new MockTransport(FAST, seed, lesson);
   void t.start("tutoring", (e) => events.push(e));
   const settle = () => t.whenIdle();
   const send = async (e: ClientEvent) => {
@@ -401,11 +402,12 @@ describe("MockTransport", () => {
       expect(results(h)).toEqual(["solved"]);
     });
 
+    // A wrong line that matches no slip, so no repair puzzle takes over (that's tested below).
     it("marks a wrong line, asks what happened, and never gives the next line (R-02, R-03)", async () => {
       const h = steps();
       await h.settle();
       const mark = h.events.length;
-      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
       expect(results(h)).toEqual(["invalid"]);
       const reply = h.said(mark).join(" ");
       expect(reply).not.toMatch(/2x = 12|x = 6/);
@@ -417,7 +419,7 @@ describe("MockTransport", () => {
     it("forgets its question about a wrong line once the student fixes the line", async () => {
       const h = steps();
       await h.settle();
-      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
       const mark = h.events.length;
       await h.send({ type: "child_message", text: "help" });
@@ -427,13 +429,76 @@ describe("MockTransport", () => {
     it("names the slip a wrong line matches, and none for a correct or unknown one (R-40)", async () => {
       const h = steps();
       await h.settle();
-      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
-      // Line 2: a one-step slip on a two-step problem, the gap one level down.
+      // Line 2: a one-step slip on a two-step problem, the gap one level down. Its repair item
+      // isn't built yet, so the hint on the line is all that happens.
       await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 10" });
       const slips = h.events.filter((e) => e.type === "step_result").map((e) => (e.type === "step_result" ? (e.slip ?? null) : null));
-      expect(slips).toEqual(["constant_moved_without_undoing", null, null, "coefficient_subtracted"]);
+      expect(slips).toEqual([null, null, "coefficient_subtracted"]);
+      expect(h.events.some((e) => e.type === "puzzle")).toBe(false);
+    });
+
+    it("sends a slip on 2x + 5 = 17 to its repair puzzle, then confirms the fix on a fresh problem (R-37, R-41)", async () => {
+      const h = steps();
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      expect(h.events.filter((e) => e.type === "step_result").at(-1)).toMatchObject({ slip: "constant_moved_without_undoing" });
+      expect(h.events).toContainEqual({ type: "topic_switch", label: "Quick puzzle" });
+      const puzzle = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
+      if (puzzle?.template !== "spot_the_error") throw new Error("expected the spot-the-error repair");
+      expect(puzzle.item_id).toBe("lin2-undo-sign-spot-error");
+      const [a, b, c] = (/^(\d+)x - (\d+) = (\d+)$/.exec(puzzle.equation) ?? []).slice(1).map(Number) as [number, number, number];
+      const id = puzzle.instance_id;
+      await h.send({ type: "puzzle_move", instance_id: id, move: { check: "found_error", line: 0 } });
+      await h.send({ type: "puzzle_move", instance_id: id, move: { check: "fixed_step", text: `${a}x = ${c + b}` } });
+      await h.send({ type: "puzzle_move", instance_id: id, move: { check: "final_answer", text: String((c + b) / a) } });
+      await h.send({ type: "child_message", text: "the minus sign" });
+
+      // Not back to 2x + 5 = 17: a fresh generated problem of the same kind takes its place.
+      const fresh = h.events.filter((e) => e.type === "problem").at(-1);
+      if (fresh?.type !== "problem") throw new Error("expected a problem");
+      expect(fresh).toMatchObject({ skill_id: "two_step_equations", format: "steps", position: 1 });
+      expect(fresh.problem_id).not.toBe("s1");
+      expect(fresh.prompt).not.toBe("2x + 5 = 17");
+      expect(h.said().join(" ")).toContain("fresh one");
+      const [, ca, sign, cb, cc] = /^(-?\d+)x ([+-]) (\d+) = (-?\d+)$/.exec(fresh.prompt) ?? [];
+      const answer = (Number(cc) - (sign === "-" ? -1 : 1) * Number(cb)) / Number(ca);
+      await h.send({ type: "step", problem_id: fresh.problem_id, line: 1, text: `x = ${answer}` });
+      expect(results(h).at(-1)).toBe("solved");
+      expect(h.problems()).toEqual(["s1", fresh.problem_id, "s2"]);
+    });
+
+    // Seeds where the fresh problem once came out as s2 (4208) or as the repair puzzle (4144).
+    it("never confirms the fix on a problem from the lesson or on the repair puzzle itself (R-41)", async () => {
+      const lesson = STEP_LESSON.map((p) => p.prompt);
+      for (const seed of [4208, 4144, 5786, 11628, ...Array.from({ length: 20 }, (_, i) => i + 1)]) {
+        const h = harness(STEP_LESSON, seed);
+        await h.settle();
+        await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+        const puzzle = h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
+        if (puzzle?.template !== "spot_the_error") throw new Error("expected the spot-the-error repair");
+        expect(isOneOf(puzzle.equation, lesson), `${seed}: ${puzzle.equation}`).toBe(false);
+        h.t.demo("skip");
+        await h.settle();
+        const fresh = h.events.filter((e) => e.type === "problem").at(-1);
+        if (fresh?.type !== "problem") throw new Error("expected a problem");
+        expect(fresh.problem_id).toBe("g1");
+        expect(isOneOf(fresh.prompt, [...lesson, puzzle.equation]), `${seed}: ${fresh.prompt}`).toBe(false);
+      }
+    });
+
+    it("still brings a fresh problem, not the slipped one, after a pause during the repair (R-02, R-21)", async () => {
+      const h = steps();
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      h.t.demo("pause");
+      await h.settle();
+      await h.send({ type: "resume" });
+      await h.send({ type: "answer", problem_id: "warmup", text: "5" });
+      expect(h.problems()).toEqual(["s1", "warmup", "g1"]);
+      const fresh = h.events.filter((e) => e.type === "problem").at(-1);
+      expect(fresh).toMatchObject({ skill_id: "two_step_equations", format: "steps" });
     });
 
     it("ignores a line out of order or for another problem", async () => {
@@ -464,7 +529,7 @@ describe("MockTransport", () => {
     it("suggests a pause after three wrong lines (R-21)", async () => {
       const h = steps();
       await h.settle();
-      for (const text of ["2x = 22", "2x = 17", "x = 11"]) await h.send({ type: "step", problem_id: "s1", line: 1, text });
+      for (const text of ["2x = 99", "2x = 17", "x = 13"]) await h.send({ type: "step", problem_id: "s1", line: 1, text });
       expect(h.events.at(-1)).toEqual({ type: "pause_suggested" });
     });
   });

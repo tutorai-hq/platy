@@ -4,8 +4,8 @@ import type {
   CheckId, CheckOutcome, PaletteId, Pans, Puzzle, PuzzleMove, PuzzleTemplate, Skin, WorkedExamplePuzzle,
 } from "../content/types";
 import {
-  balance, type BalanceInstance, type MissingInstance, missingStep, type Rng, type SpotInstance, spotTheError,
-  type WorkedInstance, workedExample,
+  balance, type BalanceInstance, isOneOf, lastStep, type Level, type MissingInstance, missingStep, oneStepBalance, type Rng,
+  type SpotInstance, spotTheError, type WorkedInstance, workedExample,
 } from "./generate";
 import { bareNumber, hasSolution, readable, sameLine } from "./grade";
 
@@ -250,6 +250,120 @@ export const ITEMS: Record<PuzzleTemplate, Item> = {
   worked_example: watch,
 };
 
+// Repair items (R-37) for slips that had none (R-40), on the existing players. Each works on one
+// move: the slip's own, on fresh numbers.
+export const REPAIRS: Record<string, Item> = {
+  // coefficient_subtracted_after_constant: the b came off, then the a was taken away.
+  "repair-two-step-coefficient": {
+    item_id: "repair-two-step-coefficient",
+    template: "missing_step",
+    skill_id: "two_step_equations",
+    intro: "{player} from the {team} got halfway through this one. Can you finish it?",
+    instructions: "Line 1 is right. Write the last line, with x on its own.",
+    hints: [
+      "In line 1, what's being done to $x$?",
+      "${a}x$ means ${a}$ times x. What undoes times?",
+      "Divide both sides of line 1 by ${a}$. What's left?",
+    ],
+    replies: {
+      missing_line: "Yes, $x = {answer}$. Dividing by ${a}$ undoes the times ${a}$.",
+    },
+    asks: {
+      subtracted_a: {
+        ask: "How did you get rid of the ${a}$ in ${a}x$?",
+        nudge: "${a}x$ means ${a}$ times x. Does taking ${a}$ away undo times?",
+      },
+      not_alone: {
+        ask: "That line's true. What's x on its own?",
+        nudge: "What's still being done to $x$ in that line?",
+      },
+      final_other: {
+        ask: "How did you get that from line 1?",
+        nudge: "What's still being done to $x$ in line 1, and what undoes it?",
+      },
+    },
+    reflection: "What does the number right next to x do to it, and how do you undo that?",
+    thanks: "Thanks. A number touching x multiplies it, so dividing is what undoes it.",
+  },
+  // undo_with_same_operation: adding was "undone" by adding again.
+  "repair-inverse-undo": {
+    item_id: "repair-inverse-undo",
+    template: "balance",
+    skill_id: "inverse_operations",
+    intro: "A balance scale: one {container} plus some loose {units} on one side. How many {units} are in the {container}?",
+    instructions: "Get the {container} alone without tipping the scale.",
+    hints: [
+      "What's sitting with the {container}, on its side of the scale?",
+      "The loose {units} were added to the {container}. What undoes adding?",
+      "Take {b_units} off both sides.",
+    ],
+    replies: {
+      solved: "Level, and the {container} is alone: it holds {answer_units}, so $x = {answer}$. Taking away undid the adding.",
+    },
+    asks: {
+      uneven_x: {
+        ask: "How many {containers} would go in each group if you split both sides into ${g}$ groups?",
+        nudge: "There's only one {container}. What else is on its side that you could take away?",
+      },
+      uneven_units: {
+        ask: "What happens to the loose {units} if you split both sides into ${g}$ groups?",
+        nudge: "Is there something to take away instead?",
+      },
+      too_many: {
+        ask: "How many loose {units} are on each side right now?",
+        nudge: "You can only take away {units} that are on both sides.",
+      },
+      nothing: {
+        ask: "What would you like to do to both sides?",
+        nudge: "Try taking some {units} off both sides.",
+      },
+    },
+    reflection: "The {units} were added to the {container}. How did you undo that, and why from both sides?",
+    thanks: "Thanks. Adding is undone by taking away, the same amount from both sides.",
+  },
+  // undo_scale_by_repeating and undo_scale_with_negative: multiplying undone the wrong way.
+  "repair-inverse-divide": {
+    item_id: "repair-inverse-divide",
+    template: "balance",
+    skill_id: "inverse_operations",
+    intro: "A balance scale: {containers} on one side, loose {units} on the other. Every {container} holds the same. How many {units} in each?",
+    instructions: "Get one {container} alone without tipping the scale.",
+    hints: [
+      "How many {containers} are there? That's the number x is multiplied by.",
+      "The {containers} stand for ${a}$ times x. What undoes times?",
+      "Split both sides into ${a}$ equal groups.",
+    ],
+    replies: {
+      solved: "Level, and one {container} is alone: it holds {answer_units}, so $x = {answer}$. Splitting undid the times.",
+    },
+    asks: {
+      uneven_x: {
+        ask: "How many {containers} would go in each group if you split both sides into ${g}$ groups?",
+        nudge: "Try a number of groups that shares the {containers} out evenly.",
+      },
+      uneven_units: {
+        ask: "What happens to the loose {units} if you split both sides into ${g}$ groups?",
+        nudge: "A split has to share both sides out evenly. How many {containers} are there?",
+      },
+      too_many: {
+        ask: "How many loose {units} are on the side with the {containers}?",
+        nudge: "There are no loose {units} there to take away. What else could you do to both sides?",
+      },
+      nothing: {
+        ask: "What would you like to do to both sides?",
+        nudge: "Try splitting both sides into equal groups.",
+      },
+    },
+    reflection: "The {containers} stood for a number times x. How did you undo the times, and why does the scale stay level?",
+    thanks: "Thanks. Multiplying is undone by dividing, the same on both sides.",
+  },
+};
+
+/** Any item a slip can point at, by id. */
+export function itemFor(item_id: string): Item | null {
+  return [...Object.values(ITEMS), ...Object.values(REPAIRS)].find((i) => i.item_id === item_id) ?? null;
+}
+
 export type Fade = 0 | 1 | 2;
 
 /** The worked example at each fade: everything shown, then the last step theirs, then both. */
@@ -325,6 +439,37 @@ export function newPuzzle(template: PuzzleTemplate, rng: Rng, instance_id: strin
     }
     case "worked_example":
       return { ...base, item: WORKED_FADES[fade], template, n: workedExample(rng), fade };
+  }
+}
+
+/**
+ * A puzzle for an item, by id. Repair items take their numbers from the generators at the
+ * student's level. No item uses a problem from the student's lesson (`avoid`), so a puzzle can't
+ * walk through one they still have to solve (R-02).
+ */
+export function newItemPuzzle(
+  item_id: string,
+  rng: Rng,
+  instance_id: string,
+  level: Level = 1,
+  avoid: readonly string[] = [],
+): LivePuzzle {
+  const base = { instance_id, outcomes: {}, tried: false, hints: 0, misses: 0 };
+  const item = REPAIRS[item_id];
+  switch (item_id) {
+    case "repair-two-step-coefficient":
+      return { ...base, item: item!, template: "missing_step", n: lastStep(rng, level, avoid) };
+    case "repair-inverse-undo":
+    case "repair-inverse-divide": {
+      const n = oneStepBalance(rng, item_id === "repair-inverse-undo" ? "shift" : "split", avoid);
+      return { ...base, item: item!, template: "balance", n, pans: n.start };
+    }
+  }
+  const template = (Object.keys(ITEMS) as PuzzleTemplate[]).find((t) => ITEMS[t].item_id === item_id);
+  if (!template) throw new Error(`no item ${item_id}`);
+  for (;;) {
+    const live = newPuzzle(template, rng, instance_id);
+    if (!isOneOf(live.n.latex, avoid)) return live;
   }
 }
 
@@ -436,7 +581,10 @@ export function gradeMove(live: LivePuzzle, move: PuzzleMove, skin: Skin): Verdi
     case "missing_step": {
       const n = live.n;
       if (move.check !== "missing_line" || missingStage(live.outcomes) !== "fill") return null;
-      const key = firstMove(move.text, n);
+      // The last line blank: x on its own, and taking the a away is the slip to ask about.
+      const key = n.blank === "last"
+        ? finalAnswer(move.text, n.answer, { value: n.c - n.b - n.a, key: "subtracted_a" })
+        : firstMove(move.text, n);
       if (key === "correct") return pass("missing_line", true);
       return key === "unreadable" ? unreadable("missing_line") : miss("missing_line", key);
     }

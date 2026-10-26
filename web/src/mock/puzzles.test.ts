@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { PALETTE } from "../content/palette";
 import type { PuzzleMove, PuzzleTemplate, Skin } from "../content/types";
-import { seeded } from "./generate";
+import { isOneOf, type Level, seeded } from "./generate";
+import { hasSolution } from "./grade";
 import {
-  type Fade, gradeMove, INTERESTS, ITEMS, line, type LivePuzzle, newPuzzle, nextHint, SKINS, skinFor, toWire, WALKTHROUGH,
-  WORKED_FADES,
+  type Fade, gradeMove, INTERESTS, ITEMS, line, type LivePuzzle, newItemPuzzle, newPuzzle, nextHint, REPAIRS, SKINS, skinFor,
+  toWire, WALKTHROUGH, WORKED_FADES,
 } from "./puzzles";
 
 const TEMPLATES: PuzzleTemplate[] = ["spot_the_error", "missing_step", "balance", "worked_example"];
@@ -338,5 +339,102 @@ describe("worked example", () => {
     const done = play(p, { check: "final_answer", text: `x = ${answer}` });
     expect(done).toMatchObject({ outcome: "correct", solved: true });
     expect(done?.reply).toContain(`$x = ${answer}$`);
+  });
+});
+
+// R-37: repair items for the slips that had none (R-40), on the existing players. Numbers come
+// from the problem generators (R-41) at the student's level.
+describe("repair items", () => {
+  const repair = <T extends PuzzleTemplate>(id: string, seed = 1, level: Level = 1, avoid?: readonly string[]) =>
+    newItemPuzzle(id, seeded(seed), `${id}-1`, level, avoid) as Extract<LivePuzzle, { template: T }>;
+
+  it("fills every line of text for every skin, and no hint gives the puzzle's answer (R-02)", () => {
+    for (const item of Object.values(REPAIRS)) {
+      const texts = [
+        item.intro, item.instructions, item.reflection, item.thanks, ...item.hints,
+        ...Object.values(item.replies), ...Object.values(item.asks).flatMap((a) => [a.ask, a.nudge]),
+      ];
+      for (let seed = 1; seed <= 30; seed++) {
+        const p = repair(item.item_id, seed);
+        for (const interest of INTERESTS) {
+          for (const t of texts) expect(line(p, SKINS[interest], () => t!, { g: 2 }), t).not.toMatch(/\{\w+\}/);
+        }
+        for (let i = 0; i < 3; i++, p.hints++) expect(nextHint(p, skin)).not.toContain(`x = ${p.n.answer}`);
+      }
+    }
+  });
+
+  it("never shows a problem from the lesson, so a puzzle can't walk through its steps (R-02)", () => {
+    // The plain balance puzzle draws 2x + 5 = 17 about once in 60, so 400 seeds would find it.
+    const lesson = ["2x + 5 = 17", "3x - 4 = 11", "x + 4 = 9"];
+    const ids = [...Object.keys(REPAIRS), ...Object.values(ITEMS).map((i) => i.item_id)];
+    for (const id of ids) {
+      for (let seed = 1; seed <= 400; seed++) {
+        const p = repair(id, seed, 1, lesson);
+        expect(isOneOf(p.n.latex, lesson), `${id} ${seed}: ${p.n.latex}`).toBe(false);
+      }
+    }
+  });
+
+  describe("two-step coefficient (missing last line)", () => {
+    it("shows the first step and leaves the last line for the student", () => {
+      for (let seed = 1; seed <= 50; seed++) {
+        const p = repair<"missing_step">("repair-two-step-coefficient", seed);
+        const { a, b, c, answer } = p.n;
+        expect(p.template).toBe("missing_step");
+        expect(p.n.linesLatex).toEqual([`${a}x = ${c - b}`, null]);
+        expect(hasSolution(p.n.equation, answer)).toBe(true);
+        // No number on screen is the answer, so it can't be copied ("3x - 5" shows a 5).
+        expect([a, Math.abs(b), c, c - b]).not.toContain(answer);
+      }
+    });
+
+    it("asks about subtracting the number in front of x, and about a line that isn't finished", () => {
+      const p = repair<"missing_step">("repair-two-step-coefficient");
+      const { a, b, c, answer } = p.n;
+      expect(play(p, { check: "missing_line", text: `x = ${c - b - a}` })?.ask?.ask).toContain(`get rid of the $${a}$`);
+      expect(play(p, { check: "missing_line", text: `${a}x = ${c - b}` })?.ask?.ask).toContain("What's x on its own?");
+      expect(play(p, { check: "missing_line", text: `x = ${answer}` })).toMatchObject({ outcome: "correct", solved: true });
+    });
+
+    it("takes its numbers from the two-step generator at the student's level", () => {
+      const negatives = Array.from({ length: 100 }, (_, i) => repair<"missing_step">("repair-two-step-coefficient", i + 1, 2).n)
+        .filter((n) => [n.a, n.b, n.c, n.answer].some((v) => v < 0));
+      expect(negatives.length).toBeGreaterThan(0);
+      // Level 1: small positive numbers ("- 4" there is a subtraction, not a negative number).
+      for (let seed = 1; seed <= 100; seed++) {
+        const { a, c, answer } = repair<"missing_step">("repair-two-step-coefficient", seed, 1).n;
+        expect([a, c, answer].every((v) => v > 0)).toBe(true);
+      }
+    });
+  });
+
+  describe("inverse operations (balance scale)", () => {
+    it("undoes adding by taking the units off: one move, then x is alone", () => {
+      for (let seed = 1; seed <= 50; seed++) {
+        const p = repair<"balance">("repair-inverse-undo", seed);
+        expect(p.n.start.left.x).toBe(1);
+        expect(p.n.answer).not.toBe(p.n.b);
+        expect(p.n.start.right.units).toBeLessThanOrEqual(30);
+        expect(play(p, { check: "move", move: { op: "remove_units", n: p.n.b } })).toMatchObject({ outcome: "correct", solved: true });
+      }
+    });
+
+    it("undoes multiplying by splitting: one move, then x is alone", () => {
+      for (let seed = 1; seed <= 50; seed++) {
+        const p = repair<"balance">("repair-inverse-divide", seed);
+        expect(p.n.start.left).toEqual({ x: p.n.a, units: 0 });
+        expect(p.n.answer).not.toBe(p.n.a);
+        expect(p.n.start.right.units).toBeLessThanOrEqual(30);
+        expect(play(p, { check: "move", move: { op: "split", groups: p.n.a } })).toMatchObject({ outcome: "correct", solved: true });
+      }
+    });
+
+    it("asks about a split that won't share out, without saying what to do", () => {
+      const p = repair<"balance">("repair-inverse-divide");
+      const v = play(p, { check: "move", move: { op: "split", groups: p.n.a + 1 } });
+      expect(v?.outcome).toBe("incorrect");
+      expect(v?.ask?.ask).toContain(`$${p.n.a + 1}$ groups`);
+    });
   });
 });
