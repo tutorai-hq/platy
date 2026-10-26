@@ -89,6 +89,13 @@ by" screen, which holds until you reload the page.
    from `src/content/map.json`. Long prerequisite lines run along the gaps between rows, so no line
    passes under a box. On a phone the map scrolls sideways, starting at today's work but far enough
    along to show the next skill. Nothing is saved; the next session starts without it.
+12. **Pre-test and post-test (R-26).** On the welcome screen or an end screen, under "Running a test session?",
+   **Start the pre-test** or **Start the post-test**. Each is 10 questions, two per demo skill at
+   level 2, one at a time, with no hints and no feedback, then a score in total and per skill.
+   The post form asks the same kind of question as the pre form in each slot, with new numbers of
+   the same size, and never repeats one. Both forms are fixed (`src/mock/pretest.ts`), so every
+   student sits the same two tests. Nothing is kept: the adult running the session writes the
+   score down. Only shown on the scripted mock for now.
 
 The dashed **Demo** button (mock only) jumps to any screen on cue: skip a problem, each of the
 three puzzles (spot the error, missing step, balance scale), the worked example, the pause screen, the

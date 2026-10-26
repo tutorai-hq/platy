@@ -406,3 +406,20 @@ button, input { font: inherit; color: inherit; }
   .map__svg { min-width: 1150px; }
   .map .map__cheer { font-size: 1rem; }
 }
+
+/* The pre and post test (R-26): one question at a time, then the score for the adult running
+   the session to write down. */
+.test-start { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; margin-top: 18px; }
+.test-start p { width: 100%; font-size: 0.9rem; }
+.screen--test { align-items: start; }
+.test { width: 100%; max-width: 560px; padding: 28px; display: flex; flex-direction: column; gap: 16px; text-align: center; align-items: center; }
+.test.problem { text-align: left; align-items: stretch; }
+.test h1 { font-size: 1.6rem; }
+.test p { color: var(--ink-soft); }
+.test__score { font-size: 1.2rem; }
+.test__score strong { color: var(--ink); font-size: 2.4rem; display: block; }
+.test__skills { width: 100%; max-width: 360px; border-collapse: collapse; }
+.test__skills th, .test__skills td { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.test__skills th { text-align: left; font-weight: 400; color: var(--ink); }
+.test__skills td { text-align: right; font-weight: 700; white-space: nowrap; }
+.test__note { font-size: 0.85rem; }

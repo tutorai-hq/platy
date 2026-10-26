@@ -260,3 +260,16 @@ export function probeProblem(skill_id: string): ScriptedProblem {
   };
 }
 
+
+// The pre and post test (R-26). No hints and no feedback while it runs, so it measures where the
+// student is; the score shows only at the end, for the person running the session to write down.
+export const TEST_TITLE = "Quick check";
+export const TEST_INTRO =
+  "10 questions, one at a time. There are no hints this time, and it's fine to skip one you don't know. Just your best try.";
+export const TEST_DONE = "All done. Thanks for giving every one a go.";
+export const TEST_NOTE = "Platy doesn't keep this score or your answers. Write the score down before you close this screen.";
+export const TEST_INSTRUCTIONS: Record<"value" | "undo" | "equation", string> = {
+  value: "Work it out",
+  undo: "Find the number b that makes this true for every x",
+  equation: "Solve for x",
+};

@@ -7,8 +7,10 @@ import { PrimerPanel } from "./components/PrimerPanel";
 import { ProblemCard } from "./components/ProblemCard";
 import { PuzzlePlayer } from "./components/PuzzlePlayer";
 import { StepSolver } from "./components/StepSolver";
+import { TestRunner } from "./components/TestRunner";
 import { YourMap } from "./components/YourMap";
 import { useTutorSession } from "./session/useTutorSession";
+import { usesMock } from "./transport";
 import type { DemoTrigger } from "./transport/types";
 
 export function App() {
@@ -24,6 +26,8 @@ export function App() {
   // the scripted mock, so a real session never shows it.
   const [primerView, setPrimerView] = useState(false);
   const showPrimer = s.isMock && primerView;
+  // The pre and post test (R-26) for a test session: before practice, or after it from the end screen.
+  const [test, setTest] = useState<"pre" | "post" | null>(null);
 
   return (
     <div className="app">
@@ -55,12 +59,19 @@ export function App() {
       {/* Every session screen sits behind the age check, not just the welcome screen. */}
       {age === "ok" && (
         <>
-          {phase === "welcome" && (
+          {(phase === "welcome" || phase === "ended") && test && (
+            <main className="screen screen--test">
+              <TestRunner key={test} form={test} onDone={() => setTest(null)} />
+            </main>
+          )}
+
+          {phase === "welcome" && !test && (
             <Screen title="Ready to practice?" mascot="calm">
               <p>Today: solving equations, one line at a time, and you can ask for hints whenever you want.</p>
               <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                 Start practice
               </button>
+              <TestStart onStart={setTest} />
             </Screen>
           )}
 
@@ -108,7 +119,7 @@ export function App() {
             </main>
           )}
 
-          {phase === "ended" && s.state.map && (
+          {phase === "ended" && !test && s.state.map && (
             <main className="screen screen--map">
               <div className="screen__inner">
                 <h1>Your map</h1>
@@ -119,11 +130,12 @@ export function App() {
                 <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                   Practice again
                 </button>
+                <TestStart onStart={setTest} />
               </div>
             </main>
           )}
 
-          {phase === "ended" && !s.state.map && (
+          {phase === "ended" && !test && !s.state.map && (
             <Screen title="Nice session!" mascot="happy">
               <p>
                 You solved {s.state.solved} {s.state.solved === 1 ? "problem" : "problems"} today.
@@ -131,6 +143,7 @@ export function App() {
               <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                 Practice again
               </button>
+              <TestStart onStart={setTest} />
             </Screen>
           )}
 
@@ -145,6 +158,23 @@ export function App() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// For a test session (R-26): the pre-test before practice and the post-test after it. Scripted mock
+// only for now.
+function TestStart({ onStart }: { onStart: (form: "pre" | "post") => void }) {
+  if (!usesMock()) return null;
+  return (
+    <div className="test-start">
+      <p>Running a test session?</p>
+      <button type="button" className="btn btn--quiet btn--small" onClick={() => onStart("pre")}>
+        Start the pre-test
+      </button>
+      <button type="button" className="btn btn--quiet btn--small" onClick={() => onStart("post")}>
+        Start the post-test
+      </button>
     </div>
   );
 }

@@ -387,7 +387,7 @@ function undo(prompt: string, answer?: Pick<Draft, "answer" | "answerText">): Dr
   return { prompt, answer: -n, answerText: String(-n) };
 }
 
-const CHECKED_AS: Record<DemoNode, "value" | "undo" | "equation"> = {
+export const CHECKED_AS: Record<DemoNode, "value" | "undo" | "equation"> = {
   integer_arithmetic: "value",
   order_of_operations: "value",
   inverse_operations: "undo",
