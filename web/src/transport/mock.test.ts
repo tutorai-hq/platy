@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PuzzleMove } from "../content/types";
 import type { ClientEvent, PrimerState, ServerEvent } from "../protocol";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
+import { CATALOG, descriptorFor, skillOf } from "../content/catalog";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { answerExample } from "../mock/answers";
@@ -10,8 +11,9 @@ import { bareNumber } from "../mock/grade";
 import {
   CLOSING, CONFIDENCE_ASK, CONFIDENCE_ASK_LATE, CONFIDENCE_CHAT, CONFIDENCE_REPLIES, confirmProblem, EXPLAIN_FIRST, KEY_STEP_ASK,
   KEY_STEP_REPLIES, KEY_STEP_REPLY_NONE, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD,
-  STEP_UNREADABLE_VALUE,
+  STEP_UNREADABLE_VALUE, SWITCH_ANGLE,
 } from "../mock/script";
+import { pickTeachItem } from "../mock/teach";
 import { firstWrong, workOut } from "../mock/working";
 import { type MockTiming, MockTransport } from "./mock";
 
@@ -1234,6 +1236,63 @@ describe("MockTransport", () => {
       await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "4" });
       await h.cont();
       expect(moves(h, mark)).toEqual(["probe:probe_passed:inverse_operations", "teach:gap_found:one_step_equations"]);
+    });
+
+    it("changes the angle when the explanation doesn't land, and never repeats one while another is unused (R-05)", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.cont();
+      await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      await h.cont();
+      const shown = (from = 0) => h.events.slice(from).flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []));
+      const angleOf = (item_id: string) => descriptorFor(item_id)!.angle;
+      // The gap is taught with the first teach item on the skill, as the selector would pick it.
+      const first = shown();
+      expect(first.map((p) => p.item_id)).toEqual([pickTeachItem("inverse_operations", [])!.id]);
+      expect(descriptorFor(first[0]!.item_id)).toMatchObject({ role: "teach", skills: { primary: "inverse_operations" } });
+      for (let i = 0; i < 3; i++) {
+        h.t.demo("skip");
+        await h.settle();
+      }
+      expect(h.problems().at(-1)).toBe("s1");
+
+      // Still missing it, with no known slip: the same skill again, from a different angle.
+      let mark = h.events.length;
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 98" });
+      expect(h.said(mark).join(" ")).toContain(SWITCH_ANGLE);
+      await h.cont();
+      expect(moves(h, mark)).toEqual(["mark_line:line_invalid:two_step_equations", "teach:switch_angle:inverse_operations"]);
+      expect(primerStates(h).at(-1)?.hypothesis).toEqual({ code: "gap_found", skill_id: "inverse_operations" });
+      const second = shown(mark);
+      expect(second).toHaveLength(1);
+      expect(descriptorFor(second[0]!.item_id)).toMatchObject({ role: "teach", skills: { primary: "inverse_operations" } });
+      expect(angleOf(second[0]!.item_id)).not.toBe(angleOf(first[0]!.item_id));
+      expect(second[0]!.item_id).toBe(pickTeachItem("inverse_operations", [angleOf(first[0]!.item_id)])!.id);
+
+      // Through it and back to the problem. Both angles used, so a third miss gets no third explanation.
+      const posed = h.problems().length;
+      for (let i = 0; i < 3 && h.problems().length === posed; i++) {
+        h.t.demo("skip");
+        await h.settle();
+      }
+      expect(h.problems().length).toBe(posed + 1);
+      expect(h.problems().at(-1)).toBe("s1");
+      expect(moves(h).at(-1)).toBe("pose_problem:gap_taught:two_step_equations");
+      mark = h.events.length;
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 97" });
+      expect(moves(h, mark)).toEqual(["mark_line:line_invalid:two_step_equations"]);
+      expect(h.said(mark).join(" ")).not.toContain(SWITCH_ANGLE);
+      expect(shown(mark)).toEqual([]);
+
+      // No angle was repeated, and every angle the catalog has for the skill was used.
+      const items = [...new Set(shown().map((p) => p.item_id))].filter((id) => skillOf(id) === "inverse_operations");
+      const angles = items.map(angleOf);
+      expect(new Set(angles).size).toBe(angles.length);
+      const inCatalog = new Set(CATALOG.filter((d) => d.role === "teach" && d.skills.primary === "inverse_operations").map((d) => d.angle));
+      expect(new Set(angles)).toEqual(inCatalog);
     });
 
     it("goes back to the problem, with no stale hypothesis, when a probe is skipped or paused", async () => {

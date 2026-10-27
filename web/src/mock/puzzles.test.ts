@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { skillOf } from "../content/catalog";
+import { skillOf, templateOf } from "../content/catalog";
 import { PALETTE } from "../content/palette";
 import type { PuzzleMove, PuzzleTemplate, Skin } from "../content/types";
 import { isOneOf, type Level, LEVELS, seeded, type WorkingSpotInstance } from "./generate";
 import { bareNumber, hasSolution, near } from "./grade";
 import {
   type Fade, gradeMove, INTERESTS, ITEMS, line, type LivePuzzle, newItemPuzzle, newPuzzle, nextHint, REPAIRS, SKINS, skinFor,
-  toWire, WALKTHROUGH, WORKED_FADES,
+  TEACH, toWire, WALKTHROUGH, WORKED_FADES,
 } from "./puzzles";
 import { checkStep } from "./steps";
 import { firstWrong, isNumeralText, numeralsIn, sameExpression, unbracketed, workOut } from "./working";
@@ -373,7 +373,7 @@ describe("repair items", () => {
   it("never shows a problem from the lesson, so a puzzle can't walk through its steps (R-02)", () => {
     // The plain balance puzzle draws 2x + 5 = 17 about once in 60, so 400 seeds would find it.
     const lesson = ["2x + 5 = 17", "3x - 4 = 11", "x + 4 = 9"];
-    const ids = [...Object.keys(REPAIRS), ...Object.values(ITEMS).map((i) => i.item_id)];
+    const ids = [...Object.keys(REPAIRS), ...Object.keys(TEACH), ...Object.values(ITEMS).map((i) => i.item_id)];
     for (const id of ids) {
       for (let seed = 1; seed <= 400; seed++) {
         const p = repair(id, seed, 1, lesson);
@@ -761,5 +761,179 @@ describe("repair items", () => {
         expect(a > 0 && answer >= 0).toBe(true);
       }
     });
+  });
+});
+
+// R-05: teach items from a second angle for every demo skill, on the existing players. Worked ones
+// fade like the two-step worked example; each carries its own reasons and "why".
+describe("teach items (R-05)", () => {
+  const teach = (id: string, seed = 1, level: Level = 1, fade: Fade = 0, avoid: readonly string[] = []) =>
+    newItemPuzzle(id, seeded(seed), `${id}-1`, level, avoid, fade);
+  const worked = (id: string, seed = 1, fade: Fade = 0, level: Level = 1) => {
+    const p = teach(id, seed, level, fade);
+    if (p.template !== "worked_example") throw new Error(`${id} is not a worked example`);
+    return p;
+  };
+  const WORKED = Object.keys(TEACH).filter((id) => templateOf(id) === "worked_example");
+  const textsOf = (p: LivePuzzle) => {
+    const i = p.item;
+    const w = p.template === "worked_example" ? [...p.item.walkthrough.reasons, p.item.walkthrough.why, ...p.item.walkthrough.choices.map((c) => c.text)] : [];
+    return [i.intro, i.instructions, i.reflection, i.thanks, ...i.hints, ...Object.values(i.replies), ...Object.values(i.asks).flatMap((a) => [a.ask, a.nudge]), ...w];
+  };
+
+  it("has nine items on the five demo skills, each on a player the mock has", () => {
+    expect(Object.keys(TEACH)).toHaveLength(9);
+    for (const [id, item] of Object.entries(TEACH)) {
+      expect(item.item_id).toBe(id);
+      expect(templateOf(id), id).not.toBeNull();
+    }
+    expect(WORKED.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("fills every line of text for every skin at every fade, and no hint gives the answer (R-02)", () => {
+    for (const id of Object.keys(TEACH)) {
+      const fades: Fade[] = templateOf(id) === "worked_example" ? FADES : [0];
+      for (const fade of fades) {
+        for (let seed = 1; seed <= 20; seed++) {
+          const p = teach(id, seed, 1, fade);
+          for (const interest of INTERESTS) {
+            for (const t of textsOf(p)) expect(line(p, SKINS[interest], () => t!, { g: 2 }), `${id} ${t}`).not.toMatch(/\{\w+\}/);
+          }
+          const valueOnly = p.template === "worked_example" && p.n.kind === "working";
+          for (let i = 0; i < 3; i++, p.hints++) {
+            const hint = nextHint(p, skin)!;
+            expect(hint, `${id} ${seed}`).not.toContain(`x = ${p.n.answer}`);
+            if (valueOnly) expect(numeralsIn(hint), `${id} ${seed} ${fade}: ${hint}`).not.toContain(Math.abs(p.n.answer));
+          }
+          expect(nextHint(p, skin)).toBeNull();
+        }
+      }
+    }
+  });
+
+  it("hands the student one more step at each fade, with the item's own reasons and why (R-37)", () => {
+    for (const id of WORKED) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const [watch, finish, solo] = FADES.map((fade) => toWire(worked(id, seed, fade), skin));
+        const { lines, linesLatex } = worked(id, seed).n;
+        if (watch?.template !== "worked_example" || finish?.template !== "worked_example" || solo?.template !== "worked_example") throw new Error("expected worked examples");
+        expect(watch.steps.map((s) => s?.latex)).toEqual(linesLatex);
+        for (const s of watch.steps) expect(s?.reason).toMatch(/\S/);
+        expect(watch.why?.choices).toHaveLength(3);
+        expect(finish.steps).toEqual([watch.steps[0], null]);
+        expect(solo.steps).toEqual([null, null]);
+        expect(finish.why).toBeNull();
+        expect(solo.why).toBeNull();
+        // A step the student writes isn't on the wire, and nor is its value (R-02).
+        const sent = (w: { steps: unknown; why: unknown; instructions: string }) => JSON.stringify([w.steps, w.why, w.instructions]);
+        const { kind, answer } = worked(id, seed).n;
+        if (kind === "equation") expect(sent(finish)).not.toContain(linesLatex[1]);
+        else expect(numeralsIn(sent(finish)), `${id} ${seed}`).not.toContain(Math.abs(answer));
+        expect(sent(solo)).not.toContain(linesLatex[0]);
+        // The lines are the student's to write in checker syntax, and the last is the answer.
+        expect(lines).toHaveLength(2);
+        expect(bareNumber(lines[1].replace(/^x = /, ""))).toBe(worked(id, seed).n.answer);
+      }
+    }
+  });
+
+  it("is solved by its own lines at every fade, and asks back about a wrong reason (R-03)", () => {
+    for (const id of WORKED) {
+      for (let seed = 1; seed <= 30; seed++) {
+        const at = (p: { n: { order: number[] } }, k: number) => p.n.order.indexOf(k);
+        const w0 = worked(id, seed, 0);
+        for (const k of [1, 2]) expect(play(w0, { check: "why", choice: at(w0, k) }), `${id} ${seed}`).toMatchObject({ outcome: "incorrect", ask: { ask: expect.stringMatching(/\S/) } });
+        expect(play(w0, { check: "why", choice: at(w0, 0) }), `${id} ${seed}`).toMatchObject({ outcome: "correct", solved: true });
+        const w1 = worked(id, seed, 1);
+        expect(play(w1, { check: "first_step", text: w1.n.lines[0] })).toBeNull();
+        expect(play(w1, { check: "final_answer", text: w1.n.lines[1] }), `${id} ${seed}: ${w1.n.lines[1]}`).toMatchObject({ outcome: "correct", solved: true });
+        const w2 = worked(id, seed, 2);
+        expect(play(w2, { check: "final_answer", text: w2.n.lines[1] })).toBeNull();
+        // The answer straight away skips the step being asked for.
+        expect(play(w2, { check: "first_step", text: w2.n.lines[1] })?.ask?.ask, `${id} ${seed}`).toBe(line(w2, skin, () => w2.item.asks.skipped!.ask));
+        expect(play(w2, { check: "first_step", text: w2.n.lines[0] }), `${id} ${seed}: ${w2.n.lines[0]}`).toMatchObject({ outcome: "correct", solved: false });
+        expect(play(w2, { check: "final_answer", text: w2.n.lines[1] })).toMatchObject({ outcome: "correct", solved: true });
+        expect(play(worked(id, seed, 2), { check: "first_step", text: "+ -" })?.outcome).toBe("unreadable");
+      }
+    }
+  });
+
+  it("asks about each known wrong line and value with the item's own words, never a missing ask", () => {
+    for (const id of WORKED) {
+      for (let seed = 1; seed <= 30; seed++) {
+        const w2 = worked(id, seed, 2);
+        for (const s of w2.n.firstSlips) {
+          expect(w2.item.asks, `${id} ${s.key}`).toHaveProperty(s.key);
+          expect(play(worked(id, seed, 2), { check: "first_step", text: s.line }), `${id} ${seed}: ${s.line}`).toMatchObject({ outcome: "incorrect", ask: expect.objectContaining({ nudge: expect.stringMatching(/\S/) }) });
+        }
+        for (const s of w2.n.finalSlips) {
+          expect(w2.item.asks, `${id} ${s.key}`).toHaveProperty(s.key);
+          expect(near(s.value, w2.n.answer), `${id} ${seed}: a slip that gives the answer`).toBe(false);
+          expect(play(worked(id, seed, 1), { check: "final_answer", text: String(s.value) }), `${id} ${seed}: ${s.value}`).toMatchObject({ outcome: "incorrect" });
+        }
+        // Some other wrong line or value still gets an ask, not a crash.
+        expect(play(worked(id, seed, 2), { check: "first_step", text: w2.n.kind === "equation" ? "x + 1000 = 1" : "1000 + 1" })).toMatchObject({ outcome: "incorrect" });
+        expect(play(worked(id, seed, 1), { check: "final_answer", text: "1000" })).toMatchObject({ outcome: "incorrect" });
+      }
+    }
+  });
+
+  it("works a worked-out expression out to its value, and an equation to x alone", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      for (const id of ["teach-integer-number-line", "teach-integer-signs", "teach-order-steps"]) {
+        const p = worked(id, seed);
+        expect(p.n.kind).toBe("working");
+        const w = workOut(p.n.equation, "usual");
+        expect(w?.lines, `${id} ${seed}: ${p.n.equation}`).toEqual(p.n.lines);
+        // No number on screen is the answer, so it can't be copied at the later fades (R-02).
+        expect(numeralsIn(`${p.n.equation} ${p.n.lines[0]}`)).not.toContain(Math.abs(p.n.answer));
+        // The value alone, or a line that still comes to it, isn't the finished last line.
+        expect(play(worked(id, seed, 1), { check: "final_answer", text: p.n.lines[0] })?.ask?.ask).toBe(line(p, skin, () => p.item.asks.not_done!.ask));
+      }
+      for (const id of ["teach-inverse-undo-chain", "teach-one-step-worked"]) {
+        const p = worked(id, seed);
+        expect(p.n.kind).toBe("equation");
+        expect(hasSolution(p.n.equation, p.n.answer)).toBe(true);
+        expect(hasSolution(p.n.lines[0], p.n.answer)).toBe(true);
+        // The first line again comes to the answer on a one-step problem, but x isn't alone yet.
+        expect(play(worked(id, seed, 1), { check: "final_answer", text: p.n.lines[0] })?.ask?.ask).toBe(line(p, skin, () => p.item.asks.not_alone!.ask));
+        expect(play(worked(id, seed, 1), { check: "final_answer", text: `${p.n.answer} = x` })).toMatchObject({ outcome: "correct", solved: true });
+      }
+      // The number line moves and the sign pattern are integer problems; the order item has two steps to name.
+      expect(worked("teach-integer-number-line", seed).n.equation).toMatch(/^-?\d+ [+-] \d+ [+-] \d+$/);
+      expect(worked("teach-integer-signs", seed).n.equation).toMatch(/^(\(-\d+\)\*\(-\d+\)|\d+\*\(-\d+\)|\(-\d+\)\*\d+) [+-] \d+$/);
+      const order = worked("teach-order-steps", seed, 0, 2);
+      expect(workOut(order.n.equation, "usual")?.reductions).toHaveLength(2);
+      // The one-step item shows the same move on both sides, then x alone.
+      const one = worked("teach-one-step-worked", seed);
+      expect(one.n.equation).toMatch(/^(\d+\*x|x [+-] \d+) = \d+$/);
+      expect(one.n.lines[0]).toMatch(/=/);
+      expect(one.n.lines[1]).toBe(`x = ${one.n.answer}`);
+    }
+  });
+
+  it("puts the equation on the pans for the balance items, and finds the error for the spot item", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const shift = teach("teach-inverse-balance", seed);
+      if (shift.template !== "balance") throw new Error("expected a balance");
+      expect(shift.n.start).toEqual({ left: { x: 1, units: shift.n.b }, right: { x: 0, units: shift.n.c } });
+      expect(play(shift, { check: "move", move: { op: "remove_units", n: shift.n.b } })).toMatchObject({ outcome: "correct", solved: true });
+      const split = teach("teach-one-step-balance", seed);
+      if (split.template !== "balance") throw new Error("expected a balance");
+      expect(split.n.start).toEqual({ left: { x: split.n.a, units: 0 }, right: { x: 0, units: split.n.c } });
+      expect(split.n.a).toBeGreaterThan(1);
+      expect(play(split, { check: "move", move: { op: "split", groups: split.n.a } })).toMatchObject({ outcome: "correct", solved: true });
+      const two = teach("teach-two-step-balance", seed);
+      if (two.template !== "balance") throw new Error("expected a balance");
+      expect(two.n.start).toEqual({ left: { x: two.n.a, units: two.n.b }, right: { x: 0, units: two.n.c } });
+      expect(play(two, { check: "move", move: { op: "remove_units", n: two.n.b } })).toMatchObject({ outcome: "correct", solved: false });
+      expect(play(two, { check: "move", move: { op: "split", groups: two.n.a } })).toMatchObject({ outcome: "correct", solved: true });
+      const spot = teach("teach-order-spot", seed, 2);
+      if (spot.template !== "spot_the_error" || spot.n.kind !== "working") throw new Error("expected a worked-out spot the error");
+      expect(firstWrong(spot.n.expression, spot.n.lines)).toBe(spot.n.wrong);
+      expect(play(spot, { check: "found_error", line: spot.n.wrong })).toMatchObject({ outcome: "correct" });
+      expect(play(spot, { check: "fixed_step", text: spot.n.fix })).toMatchObject({ outcome: "correct" });
+      expect(play(spot, { check: "final_answer", text: String(spot.n.answer) })).toMatchObject({ outcome: "correct", solved: true });
+    }
   });
 });

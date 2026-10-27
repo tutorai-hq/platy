@@ -22,6 +22,7 @@
     "probe_deeper": "Missed that too. Checking one level deeper: {skill}.",
     "probe_passed": "Probe passed, so the gap isn't in {skill}.",
     "gap_found": "The gap is {skill}. Teaching it with a worked example.",
+    "switch_angle": "That explanation didn't land. Teaching {skill} again from a different angle.",
     "prereqs_solid": "Prerequisites look solid. Back to {skill}.",
     "gap_taught": "Gap taught. Back to the {skill} problem that showed it.",
     "back_to_problem": "Back to the {skill} problem from before.",

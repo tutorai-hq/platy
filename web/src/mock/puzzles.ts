@@ -5,9 +5,9 @@ import type {
   CheckId, CheckOutcome, PaletteId, Pans, Puzzle, PuzzleMove, PuzzleTemplate, Skin, WorkedExamplePuzzle,
 } from "../content/types";
 import {
-  balance, type BalanceInstance, equationKey, isOneOf, lastStep, type Level, type MissingInstance, missingStep, oneStepBalance,
-  oneStepLine, orderChain, type Rng, signChain, type SpotInstance, spotTheError, sumLine, type WorkedInstance, workedExample,
-  type WorkingSpotInstance,
+  balance, type BalanceInstance, equationKey, isOneOf, lastStep, type Level, type MissingInstance, missingStep, numberLineWorked,
+  oneStepBalance, oneStepLine, oneStepWorked, orderChain, orderWorked, type Rng, signChain, signWorked, type SpotInstance, spotTheError,
+  sumLine, type WorkedInstance, workedExample, type WorkingSpotInstance,
 } from "./generate";
 import { bareNumber, hasSolution, near, readable, sameLine } from "./grade";
 import { expressionKey, isNumeralText, sameExpression, sameSum } from "./working";
@@ -77,10 +77,34 @@ export interface Item {
   thanks: string;
 }
 
+/** What a worked example says about its own lines: the move each makes, and why the first works. */
+export interface Walkthrough {
+  reasons: [string, string];
+  why: string;
+  /** The right reason, then wrong ones the tutor asks back about. The instance shuffles them. */
+  choices: { text: string; ask: string | null }[];
+}
+
+/**
+ * A worked example's item: its text with every step shown, plus what changes at the next two
+ * fades, where the last step and then both are the student's (R-37).
+ */
+export interface WorkedItem extends Item {
+  walkthrough: Walkthrough;
+  fades: [Partial<Item>, Partial<Item>];
+}
+
+export type Fade = 0 | 1 | 2;
+
+/** The item as the student sees it at a fade. */
+export function atFade(item: WorkedItem, fade: Fade): WorkedItem {
+  return fade === 0 ? item : { ...item, ...item.fades[fade - 1] };
+}
+
 // A worked example (R-37) teaches a new step. The primer fades it as mastery grows, handing the
 // student one more step each time, last step first (backward fading). Each fade is the same
 // item with its own lines; this first one is all watching, then a "why" (R-03).
-const watch: Item = {
+const watch: WorkedItem = {
   item_id: "lin2-worked-example",
   intro: "Here's how {player} from the {team} solves a two-step equation. Read it a step at a time.",
   instructions: "Read each step, then say why the first one works.",
@@ -130,6 +154,39 @@ const watch: Item = {
   },
   reflection: "In your own words: in a problem like this, what do you undo first, and why?",
   thanks: "Thanks, undoing the $+ {b}$ first is the step I asked about. Next, {player} starts one and you write the last line.",
+  walkthrough: {
+    reasons: ["Subtract ${b}$ from both sides.", "Divide both sides by ${a}$."],
+    why: "Why does {player} subtract ${b}$ first?",
+    choices: [
+      { text: "It undoes the $+ {b}$, so only ${a}x$ is left.", ask: null },
+      { text: "You always subtract before you divide.", ask: "always_subtract" },
+      { text: "It gets rid of the ${a}$ in front of $x$.", ask: "wrong_part" },
+    ],
+  },
+  fades: [
+    {
+      intro: "{player} started this one. You finish it.",
+      instructions: "{player} did the first step. Write the last line.",
+      hints: [
+        "What's still being done to x in line 1?",
+        "${a}x$ means ${a}$ times x. What undoes times?",
+        "Divide both sides of line 1 by ${a}$. What's left?",
+      ],
+      reflection: "How did you know to divide by ${a}$ for the last line?",
+      thanks: "Thanks, dividing by ${a}$ undoes the times ${a}$. Next you write every step yourself.",
+    },
+    {
+      intro: "Now you write every step, the way {player} did.",
+      instructions: "Solve it one step at a time.",
+      hints: [
+        "What does the problem do to x, and in what order?",
+        "Undo the adding first. What takes away the $+ {b}$?",
+        "Subtract ${b}$ from both sides, then divide by ${a}$.",
+      ],
+      reflection: "Which step was easiest to write yourself, and which one do you want more practice on?",
+      thanks: "Thanks. Knowing which step to practice is how you get faster.",
+    },
+  ],
 };
 
 // Text fills from {name} slots: the skin's words and the instance's numbers. LaTeX in here
@@ -631,52 +688,585 @@ export const REPAIRS: Record<string, Item> = {
 };
 
 /** Any item a slip can point at, by id. */
+// Teach items from a second angle (R-05). Every demo skill has two ways to be explained, so when
+// one doesn't land the next is different rather than the same one again. These use the existing
+// players, with the generators' numbers; the catalog carries each one's skill and angle.
+const BALANCE_ASKS: Record<string, Ask> = {
+  uneven_units: {
+    ask: "What happens to the loose {units} if you split both sides into ${g}$ groups?",
+    nudge: "A split only works if everything shares out evenly. Is there something to take away first?",
+  },
+  uneven_x: {
+    ask: "How many {containers} would go in each group if you split both sides into ${g}$ groups?",
+    nudge: "Try a number of groups that shares the {containers} out evenly.",
+  },
+  too_many: {
+    ask: "How many loose {units} are on each side right now?",
+    nudge: "You can only take away {units} that are on both sides.",
+  },
+  nothing: {
+    ask: "What would you like to do to both sides?",
+    nudge: "Try taking some {units} off, or splitting both sides into groups.",
+  },
+};
+
+/** The worked teach items, which fade like the two-step worked example. */
+const WORKED_TEACH: Record<string, WorkedItem> = {
+  // Inverse operations as an undo chain: what was done to x, undone in reverse.
+  "teach-inverse-undo-chain": {
+    item_id: "teach-inverse-undo-chain",
+    intro: "{player} from the {team} undoes a two-step equation, one move at a time. Read what gets undone first.",
+    instructions: "Read each step, then say why the first undo comes first.",
+    hints: [
+      "What was done to $x$, and in what order? Undoing goes in reverse.",
+      "The last thing done to $x$ was $+ {b}$. What comes off first?",
+      "Line 1 has no $+ {b}$ left. Which move took it off?",
+    ],
+    replies: {
+      why: "Right. The $+ {b}$ came last, so it comes off first, and then dividing undoes the times ${a}$.",
+      first_step: "Yes. Now undo the times ${a}$.",
+      final_answer: "That's it, $x = {answer}$. Check: ${a} \\cdot {answer} + {b} = {c}$.",
+    },
+    asks: {
+      always_subtract: {
+        ask: "What if the problem were ${a}x - {b}$? Would you still take ${b}$ off first?",
+        nudge: "Each move undoes something done to $x$. What undoes $+ {b}$?",
+      },
+      wrong_part: {
+        ask: "Look at line 1. Is the ${a}$ still there after the first move?",
+        nudge: "Taking ${b}$ off changed the $+ {b}$, not the ${a}$.",
+      },
+      same_op: {
+        ask: "The problem adds ${b}$. What did your line do with the ${b}$?",
+        nudge: "Adding ${b}$ again doesn't undo it. What does?",
+      },
+      skipped: {
+        ask: "That's where it ends up. What does the line look like right after the first undo?",
+        nudge: "The first line still has ${a}x$ in it.",
+      },
+      other: {
+        ask: "How did you get that from the problem?",
+        nudge: "What has to happen to the ${b}$ before you can divide?",
+      },
+      not_alone: {
+        ask: "That line's true. What does $x$ equal?",
+        nudge: "What's still being done to $x$ in that line?",
+      },
+      subtracted_a: {
+        ask: "How did you get rid of the ${a}$ in ${a}x$?",
+        nudge: "${a}x$ means ${a}$ times $x$. What undoes times?",
+      },
+      final_other: {
+        ask: "How did you get that from line 1?",
+        nudge: "What's still being done to $x$ in line 1?",
+      },
+    },
+    reflection: "In your own words: why does the last thing done to $x$ get undone first?",
+    thanks: "Thanks. Undo in reverse order: last thing done, first thing undone.",
+    walkthrough: {
+      reasons: [
+        "$x$ was times ${a}$, then $+ {b}$. Undo the last move first: take ${b}$ off both sides.",
+        "Now undo the times ${a}$: divide both sides by ${a}$.",
+      ],
+      why: "Why does {player} undo the $+ {b}$ before the times ${a}$?",
+      choices: [
+        { text: "It was done to $x$ last, so it comes off first.", ask: null },
+        { text: "Adding always gets undone before multiplying.", ask: "always_subtract" },
+        { text: "Taking ${b}$ off gets rid of the ${a}$.", ask: "wrong_part" },
+      ],
+    },
+    fades: [
+      {
+        intro: "{player} undid the first move. You undo the last one.",
+        instructions: "Line 1 is done. Write the last line, with $x$ alone.",
+        hints: [
+          "What's still being done to $x$ in line 1?",
+          "${a}x$ means ${a}$ times $x$. What undoes times?",
+          "Divide both sides of line 1 by ${a}$. What's left?",
+        ],
+        reflection: "How did you know what to undo in line 1?",
+        thanks: "Thanks. Dividing undoes the times ${a}$, the way taking away undoes adding.",
+      },
+      {
+        intro: "Now you undo every move yourself, in reverse.",
+        instructions: "Undo one move per line, last move first.",
+        hints: [
+          "What was done to $x$, and what was done last?",
+          "Undo the $+ {b}$ first. What takes it off?",
+          "Take ${b}$ off both sides, then divide by ${a}$.",
+        ],
+        reflection: "Which move did you undo first, and how did you know?",
+        thanks: "Thanks. Knowing the order is the whole skill here.",
+      },
+    ],
+  },
+  // One-step equations as the same move on both sides, written out.
+  "teach-one-step-worked": {
+    item_id: "teach-one-step-worked",
+    intro: "{player} from the {team} solves a one-step equation by doing the same move on both sides.",
+    instructions: "Read both steps, then say why the first move works.",
+    hints: [
+      "What does the problem do to $x$?",
+      "The problem {does}. Which move undoes that?",
+      "Do the undo on both sides, and write what each side comes to.",
+    ],
+    replies: {
+      why: "Right. The move undoes what the problem does to $x$, and both sides get it, so the equation stays true.",
+      first_step: "Yes. Now work out each side.",
+      final_answer: "That's it, $x = {answer}$. Both sides got the same move, so the equation stayed true.",
+    },
+    asks: {
+      always: {
+        ask: "Does every equation get that move? What does this problem do to $x$?",
+        nudge: "The move undoes what the problem does to $x$. Say what this one does.",
+      },
+      wrong_reason: {
+        ask: "What does the move do to the side with $x$ on it?",
+        nudge: "Look at the left side of line 1. What's left there?",
+      },
+      wrong_way: {
+        ask: "The problem {does}. What did your line do with the ${n}$?",
+        nudge: "Doing the same thing again doesn't undo it. Which move does?",
+      },
+      skipped: {
+        ask: "That's where it ends up. What does the line look like right after the move, before working it out?",
+        nudge: "Line 1 shows the move on both sides, not worked out yet.",
+      },
+      other: {
+        ask: "How did you get that line from the problem?",
+        nudge: "What move undoes what the problem does to $x$?",
+      },
+      not_alone: {
+        ask: "That line's true. What does $x$ equal?",
+        nudge: "Work out each side. What's left?",
+      },
+      subtracted_a: {
+        ask: "How did you get rid of the ${a}$ in ${a}x$?",
+        nudge: "${a}x$ means ${a}$ times $x$. What undoes times?",
+      },
+      multiplied: {
+        ask: "The problem multiplies $x$ by ${a}$. What did your line do with the ${a}$?",
+        nudge: "Multiplying again doesn't undo it. What does?",
+      },
+      final_other: {
+        ask: "How did you get that from line 1?",
+        nudge: "Work out each side of line 1. What is $x$?",
+      },
+    },
+    reflection: "Why does the move have to happen on both sides?",
+    thanks: "Thanks. One move, both sides, and $x$ is alone.",
+    walkthrough: {
+      reasons: ["The problem {does}. To undo that, {undo}.", "Work out each side, and $x$ is alone."],
+      why: "Why does {player} {undo}?",
+      choices: [
+        { text: "It undoes what the problem does to $x$.", ask: null },
+        { text: "Every equation gets that move.", ask: "always" },
+        { text: "It makes the numbers smaller.", ask: "wrong_reason" },
+      ],
+    },
+    fades: [
+      {
+        intro: "{player} did the move. You work it out.",
+        instructions: "Line 1 is done. Write the last line, with $x$ alone.",
+        hints: [
+          "What does each side of line 1 come to?",
+          "The left side: what's left once the undo is done?",
+          "Work out the right side of line 1. That's $x$.",
+        ],
+        reflection: "How did you know what each side came to?",
+        thanks: "Thanks. Once the move is done, the rest is arithmetic.",
+      },
+      {
+        intro: "Now you do both steps, the way {player} did.",
+        instructions: "Write the move on both sides, then $x$ alone.",
+        hints: [
+          "What does the problem do to $x$?",
+          "To undo it, {undo}.",
+          "After the move, work out each side. What is $x$?",
+        ],
+        reflection: "Which line was harder to write, and why?",
+        thanks: "Thanks. Knowing which line is hard tells you what to practise.",
+      },
+    ],
+  },
+  // Integer sums as moves on a number line: right for plus, left for minus.
+  "teach-integer-number-line": {
+    item_id: "teach-integer-number-line",
+    intro: "{player} from the {team} works this out on a number line, one move at a time.",
+    instructions: "Read each move, then say why the first one goes {dir1}.",
+    hints: [
+      "Where do you start on the number line, and which way does $+$ move?",
+      "Start at ${start}$. The ${sign1} {b}$ moves {dir1} by ${b}$.",
+      "After the first move you're at ${mid}$. Now the ${sign2} {c}$.",
+    ],
+    replies: {
+      why: "Right. $+$ moves right and $-$ moves left, whatever the numbers are.",
+      first_step: "Yes. Now the last move.",
+      final_answer: "That's it, ${answer}$. Two moves on the number line, and you're there.",
+    },
+    asks: {
+      always_dir: {
+        ask: "Does every move go {dir1}? What decides the direction?",
+        nudge: "The sign in front of a number says which way: $+$ right, $-$ left.",
+      },
+      size_rule: {
+        ask: "If the number were bigger, would that change the direction?",
+        nudge: "Size is how far you move. The sign is which way.",
+      },
+      wrong_way: {
+        ask: "Which way did you move, and what sign told you to?",
+        nudge: "$+$ moves right, $-$ moves left. Check each move's sign.",
+      },
+      sign_lost: {
+        ask: "Is the end point above zero or below it?",
+        nudge: "Where did you end up on the number line, left or right of zero?",
+      },
+      skipped: {
+        ask: "That's where it ends up. What's left after the first move only?",
+        nudge: "Make one move, and leave the rest as it is.",
+      },
+      copied: {
+        ask: "That's the problem again. What's the next line, after the first move?",
+        nudge: "Make the first move and write what's left.",
+      },
+      other: {
+        ask: "How did you get that from the problem?",
+        nudge: "Start at ${start}$ and make one move. Where are you?",
+      },
+      not_done: {
+        ask: "That's true. What does it come to?",
+        nudge: "Make the last move and write the one number.",
+      },
+      final_other: {
+        ask: "How did you get that from line 1?",
+        nudge: "Start from line 1 and make the last move.",
+      },
+    },
+    reflection: "How does the sign in front of a number tell you which way to move?",
+    thanks: "Thanks. Right for plus, left for minus: that's every integer sum.",
+    walkthrough: {
+      reasons: [
+        "Start at ${start}$. The ${sign1} {b}$ means move {dir1} ${b}$, to ${mid}$.",
+        "From ${mid}$, the ${sign2} {c}$ means move {dir2} ${c}$.",
+      ],
+      why: "Why does {player} move {dir1} first?",
+      choices: [
+        { text: "The sign says which way: $+$ moves right, $-$ moves left.", ask: null },
+        { text: "The first move always goes {dir1}.", ask: "always_dir" },
+        { text: "The bigger number decides the direction.", ask: "size_rule" },
+      ],
+    },
+    fades: [
+      {
+        intro: "{player} made the first move. You make the last one.",
+        instructions: "Line 1 is done. Write the last line: the number you land on.",
+        hints: [
+          "Where are you after line 1, and which way is the next move?",
+          "The ${sign2} {c}$ moves {dir2} by ${c}$.",
+          "From ${mid}$, move {dir2} ${c}$. Where do you land?",
+        ],
+        reflection: "How did you know which way the last move went?",
+        thanks: "Thanks. The sign told you the way, the number how far.",
+      },
+      {
+        intro: "Now you make both moves, the way {player} did.",
+        instructions: "Write one move per line, then the number you land on.",
+        hints: [
+          "Where do you start, and which way does the first sign send you?",
+          "Start at ${start}$ and move {dir1} ${b}$. Write what's left to do.",
+          "Then the ${sign2} {c}$: move {dir2} ${c}$.",
+        ],
+        reflection: "Which move was easier, and why?",
+        thanks: "Thanks. Two moves, each with its own sign.",
+      },
+    ],
+  },
+  // Integer products as a sign rule, then one more step.
+  "teach-integer-signs": {
+    item_id: "teach-integer-signs",
+    intro: "{player} from the {team} works out a product with {signs}, then one more step.",
+    instructions: "Read both steps, then say why the product's sign comes out {product_sign}.",
+    hints: [
+      "Look at the two signs in the product. Same or different?",
+      "{rule}. What is ${step1}$?",
+      "Line 1 is ${mid}$ with the ${c}$ still to go. Now the {then}.",
+    ],
+    replies: {
+      why: "Right. {rule}, so ${step1}$ is ${mid}$.",
+      first_step: "Yes. Now the last step.",
+      final_answer: "That's it, ${answer}$. Signs first, then the rest.",
+    },
+    asks: {
+      bigger_sign: {
+        ask: "Which sign did you keep, and why that one?",
+        nudge: "The size of a number doesn't set the sign of a product. The two signs do.",
+      },
+      first_sign: {
+        ask: "Does the first number's sign decide by itself?",
+        nudge: "Look at both signs together. Same signs or different?",
+      },
+      product_sign: {
+        ask: "Is ${step1}$ above zero or below it?",
+        nudge: "{rule}. Check the sign of line 1.",
+      },
+      sign_lost: {
+        ask: "Is the result above zero or below it? Go through the signs once more.",
+        nudge: "Keep the sign with each number as you go. What's the sign of the last step?",
+      },
+      skipped: {
+        ask: "That's where it ends up. What does this line look like with only the product done?",
+        nudge: "Work out the product, and leave the rest as it is.",
+      },
+      copied: {
+        ask: "That's the problem again. What's the next line?",
+        nudge: "Work out the product and write what's left.",
+      },
+      other: {
+        ask: "How did you get that from the problem?",
+        nudge: "Work out the product first. What is ${step1}$?",
+      },
+      not_done: {
+        ask: "That's true. What does it come to?",
+        nudge: "Work out what's left in that line, and write the one number.",
+      },
+      final_other: {
+        ask: "How did you get that from line 1?",
+        nudge: "Line 1 has one step left. Do it.",
+      },
+    },
+    reflection: "In your own words: when is a product negative, and when is it positive?",
+    thanks: "Thanks. Same signs give positive, different signs give negative.",
+    walkthrough: {
+      reasons: ["{rule}: ${step1}$ is ${mid}$.", "Then {then}: ${step2}$."],
+      why: "Why is ${step1}$ {product_sign}?",
+      choices: [
+        { text: "{rule}.", ask: null },
+        { text: "The bigger number's sign wins.", ask: "bigger_sign" },
+        { text: "A product keeps the first number's sign.", ask: "first_sign" },
+      ],
+    },
+    fades: [
+      {
+        intro: "{player} did the product. You finish it.",
+        instructions: "Line 1 is done. Write the last line: the one number it comes to.",
+        hints: [
+          "What's left to do in line 1?",
+          "Line 1 is a sum with two numbers. Work it out.",
+          "Take the ${c}$ from ${mid}$, or add it, as the sign says.",
+        ],
+        reflection: "What was left after the product, and how did you finish it?",
+        thanks: "Thanks. Product first, then the rest.",
+      },
+      {
+        intro: "Now you do both steps, the way {player} did.",
+        instructions: "Work out the product on line 1, then the number it all comes to.",
+        hints: [
+          "Which part is the product, and what are its two signs?",
+          "{rule}. Write the product's value with the ${c}$ still to go.",
+          "Then the {then}: ${c}$.",
+        ],
+        reflection: "Which step needed more care, the signs or the last step?",
+        thanks: "Thanks. Signs need care every time.",
+      },
+    ],
+  },
+  // Order of operations with each step named.
+  "teach-order-steps": {
+    item_id: "teach-order-steps",
+    intro: "{player} from the {team} works this out one step at a time, and names each step.",
+    instructions: "Read both steps, then say why ${step1}$ comes first.",
+    hints: [
+      "Which part of the problem gets worked out first, and why?",
+      "{first_rule}. Which part is that here?",
+      "{first_name} first: work out ${step1}$ and leave the rest.",
+    ],
+    replies: {
+      why: "Right. {first_rule}, so ${step1}$ goes first.",
+      first_step: "Yes. Now the last step.",
+      final_answer: "That's it, ${answer}$. One step at a time, in the right order.",
+    },
+    asks: {
+      left_first: {
+        ask: "Which operation did you do first, and why that one?",
+        nudge: "Being on the left doesn't make an operation first. {first_rule}.",
+      },
+      size_rule: {
+        ask: "Would bigger numbers change which step comes first?",
+        nudge: "The order comes from the operations, not the size of the numbers.",
+      },
+      skipped: {
+        ask: "That's where it ends up. What does this line look like with just the first step done?",
+        nudge: "Do one operation and leave the rest as it is.",
+      },
+      copied: {
+        ask: "That's the problem again. What's the first step from it?",
+        nudge: "Work out one operation and write what's left.",
+      },
+      other: {
+        ask: "How did you get that from the problem?",
+        nudge: "{first_rule}. Do that one step.",
+      },
+      not_done: {
+        ask: "That's true. What does it come to?",
+        nudge: "Work out what's left in that line, and write the one number.",
+      },
+      final_other: {
+        ask: "How did you get that from line 1?",
+        nudge: "Line 1 has one step left. Do it.",
+      },
+    },
+    reflection: "How did you decide which step came first?",
+    thanks: "Thanks. Deciding the order before you start is the whole skill here.",
+    walkthrough: {
+      reasons: ["{first_name} first: ${step1}$ is ${mid}$.", "Then {then}: ${step2}$."],
+      why: "Why does {player} work out ${step1}$ first?",
+      choices: [
+        { text: "{first_rule}.", ask: null },
+        { text: "It's the first thing on the left.", ask: "left_first" },
+        { text: "It has the bigger numbers.", ask: "size_rule" },
+      ],
+    },
+    fades: [
+      {
+        intro: "{player} did the first step. You do the last.",
+        instructions: "Line 1 is done. Write the last line: the one number it comes to.",
+        hints: [
+          "What's the one step left in line 1?",
+          "Line 1 has two numbers and one operation. Work it out.",
+          "Only the {then} is left. Do it.",
+        ],
+        reflection: "What was left after the first step?",
+        thanks: "Thanks. One step done, one to go, and you did it.",
+      },
+      {
+        intro: "Now you do both steps, the way {player} did.",
+        instructions: "Write the first step's result with the rest left as it is, then the answer.",
+        hints: [
+          "{first_rule}. Which part is that here?",
+          "{first_name} first: work out ${step1}$ and leave the rest.",
+          "Then the {then}.",
+        ],
+        reflection: "Which step came first, and how did you know?",
+        thanks: "Thanks. Name the order first, then the steps are easy.",
+      },
+    ],
+  },
+};
+
+/** Every teach item (R-05): the worked ones above, and the balance scales and the spot-the-error. */
+export const TEACH: Record<string, Item> = {
+  ...WORKED_TEACH,
+  // Inverse operations on a balance scale: take the same off both pans.
+  "teach-inverse-balance": {
+    item_id: "teach-inverse-balance",
+    intro: "A balance scale: one {container} and some loose {units} on one side. Undo the adding to find what's inside.",
+    instructions: "Get the {container} alone without tipping the scale.",
+    hints: [
+      "What's sitting with the {container} on its side of the scale?",
+      "The loose {units} were added to the {container}. What undoes adding?",
+      "Take {b_units} off both sides, so it stays level.",
+    ],
+    replies: {
+      solved: "Level, and the {container} is alone: it holds {answer_units}, so $x = {answer}$. Taking away undid the adding.",
+    },
+    asks: {
+      ...BALANCE_ASKS,
+      uneven_x: {
+        ask: "How many {containers} would go in each group if you split both sides into ${g}$ groups?",
+        nudge: "There's only one {container}. What else is on its side that you could take away?",
+      },
+      nothing: {
+        ask: "What would you like to do to both sides?",
+        nudge: "Try taking some {units} off both sides.",
+      },
+    },
+    reflection: "The {units} were added to the {container}. Why does taking the same number off both sides undo that?",
+    thanks: "Thanks. Adding is undone by taking away, the same amount from both sides.",
+  },
+  // One-step equations on a balance scale: split both sides into equal groups.
+  "teach-one-step-balance": {
+    item_id: "teach-one-step-balance",
+    intro: "A balance scale: {a} {containers} on one side, loose {units} on the other. Every {container} holds the same number.",
+    instructions: "Get one {container} alone without tipping the scale.",
+    hints: [
+      "How many {containers} are on the left, and how many loose {units} on the right?",
+      "Splitting both sides into equal groups keeps the scale level. How many groups?",
+      "Split both sides into ${a}$ groups, and keep one group.",
+    ],
+    replies: {
+      solved: "Level, and one {container} is alone. Each holds {answer_units}, so $x = {answer}$.",
+    },
+    asks: {
+      ...BALANCE_ASKS,
+      uneven_units: {
+        ask: "What happens to the loose {units} if you split both sides into ${g}$ groups?",
+        nudge: "A split only works if everything shares out evenly. How many {containers} are there?",
+      },
+      too_many: {
+        ask: "How many loose {units} are on each side right now?",
+        nudge: "There are no loose {units} with the {containers}. Try splitting instead.",
+      },
+      nothing: {
+        ask: "What would you like to do to both sides?",
+        nudge: "Try splitting both sides into groups.",
+      },
+    },
+    reflection: "Why did splitting into ${a}$ groups work, and not some other number?",
+    thanks: "Thanks. Splitting into equal groups is dividing, and it works the same way on paper.",
+  },
+  // Two-step equations on a balance scale: take away first, then split.
+  "teach-two-step-balance": {
+    item_id: "teach-two-step-balance",
+    intro: "A balance scale for a two-step equation: {containers} and loose {units} on one side. Two moves get one {container} alone.",
+    instructions: "Get one {container} alone without tipping the scale.",
+    hints: [
+      "What's on the side with the {containers}, besides the {containers}?",
+      "Take the loose {units} off first, from both sides so it stays level.",
+      "Take {b_units} off both sides, then split into ${a}$ groups.",
+    ],
+    replies: {
+      solved: "Level, and one {container} is alone. Each holds {answer_units}, so $x = {answer}$: take away first, then split.",
+    },
+    asks: BALANCE_ASKS,
+    reflection: "Why did taking away come before splitting here?",
+    thanks: "Thanks. Undo the adding first, then the multiplying: it works the same way on paper.",
+  },
+  // Order of operations by contrast: a wrong solution to find the slip in.
+  "teach-order-spot": {
+    item_id: "teach-order-spot",
+    intro: "{player} from the {team} tried this one, and it went wrong somewhere. Finding the slip teaches the rule.",
+    instructions: "One line of this working is wrong. Tap it, then write what it should say.",
+    hints: [
+      "Check each line against the one above it. Does it still come to the same thing?",
+      "Which comes first: multiplying and dividing, or adding and taking away?",
+      "Multiplying and dividing come first, even when they're later in the line. Which line broke that?",
+    ],
+    replies: {
+      found_error: "Yes, that's the one. What should it say?",
+      fixed_step: "Right. Now finish it from your line.",
+      final_answer: "That's it, ${answer}$. The slip was doing the left part first.",
+    },
+    asks: {
+      ...WORKING_ASKS,
+      left_first: {
+        ask: "Which operation did you do first in that line, and why that one?",
+        nudge: "Being on the left doesn't make an operation first. Which kind comes first?",
+      },
+    },
+    reflection: "What did the wrong line do first, and what should it have done first?",
+    thanks: "Thanks. Seeing a slip is a good way to remember the rule.",
+  },
+};
+
 export function itemFor(item_id: string): Item | null {
-  return [...Object.values(ITEMS), ...Object.values(REPAIRS)].find((i) => i.item_id === item_id) ?? null;
+  return [...Object.values(ITEMS), ...Object.values(REPAIRS), ...Object.values(TEACH)].find((i) => i.item_id === item_id) ?? null;
 }
 
-export type Fade = 0 | 1 | 2;
-
 /** The worked example at each fade: everything shown, then the last step theirs, then both. */
-export const WORKED_FADES: [Item, Item, Item] = [
-  watch,
-  {
-    ...watch,
-    intro: "{player} started this one. You finish it.",
-    instructions: "{player} did the first step. Write the last line.",
-    hints: [
-      "What's still being done to x in line 1?",
-      "${a}x$ means ${a}$ times x. What undoes times?",
-      "Divide both sides of line 1 by ${a}$. What's left?",
-    ],
-    reflection: "How did you know to divide by ${a}$ for the last line?",
-    thanks: "Thanks, dividing by ${a}$ undoes the times ${a}$. Next you write every step yourself.",
-  },
-  {
-    ...watch,
-    intro: "Now you write every step, the way {player} did.",
-    instructions: "Solve it one step at a time.",
-    hints: [
-      "What does the problem do to x, and in what order?",
-      "Undo the adding first. What takes away the $+ {b}$?",
-      "Subtract ${b}$ from both sides, then divide by ${a}$.",
-    ],
-    reflection: "Which step was easiest to write yourself, and which one do you want more practice on?",
-    thanks: "Thanks. Knowing which step to practice is how you get faster.",
-  },
-];
+export const WORKED_FADES: [WorkedItem, WorkedItem, WorkedItem] = [watch, atFade(watch, 1), atFade(watch, 2)];
 
-/** What a worked example says about its own lines: the move each makes, and why the first works. */
-export const WALKTHROUGH: { reasons: string[]; why: string; choices: { text: string; ask: string | null }[] } = {
-  reasons: ["Subtract ${b}$ from both sides.", "Divide both sides by ${a}$."],
-  why: "Why does {player} subtract ${b}$ first?",
-  // The right reason, then two wrong ones the tutor asks back about. The instance shuffles them.
-  choices: [
-    { text: "It undoes the $+ {b}$, so only ${a}x$ is left.", ask: null },
-    { text: "You always subtract before you divide.", ask: "always_subtract" },
-    { text: "It gets rid of the ${a}$ in front of $x$.", ask: "wrong_part" },
-  ],
-};
+/** What the two-step worked example says about its own lines. */
+export const WALKTHROUGH: Walkthrough = watch.walkthrough;
 
 interface LiveBase {
   item: Item;
@@ -695,7 +1285,7 @@ export type LivePuzzle =
   | (LiveBase & { template: "spot_the_error"; n: WorkingSpotInstance })
   | (LiveBase & { template: "missing_step"; n: MissingInstance })
   | (LiveBase & { template: "balance"; n: BalanceInstance; pans: Pans })
-  | (LiveBase & { template: "worked_example"; n: WorkedInstance; fade: Fade });
+  | (LiveBase & { template: "worked_example"; item: WorkedItem; n: WorkedInstance; fade: Fade });
 
 /** The fade only applies to a worked example; the primer would set it from mastery. */
 export function newPuzzle(template: PuzzleTemplate, rng: Rng, instance_id: string, fade: Fade = 0): LivePuzzle {
@@ -749,17 +1339,49 @@ export function newItemPuzzle(
   instance_id: string,
   level: Level = 1,
   avoid: readonly string[] = [],
+  fade: Fade = 0,
 ): LivePuzzle {
   for (;;) {
-    const live = drawItem(item_id, rng, instance_id, level, avoid);
+    const live = drawItem(item_id, rng, instance_id, level, avoid, fade);
     if (!showsProbe(live)) return live;
   }
 }
 
-function drawItem(item_id: string, rng: Rng, instance_id: string, level: Level, avoid: readonly string[]): LivePuzzle {
+/** An instance from a generator with no `avoid` of its own, drawn again while it's a line to stay away from. */
+function avoiding<T extends { latex: string }>(rng: Rng, make: (rng: Rng) => T, avoid: readonly string[]): T {
+  for (;;) {
+    const n = make(rng);
+    if (!isOneOf(n.latex, avoid)) return n;
+  }
+}
+
+function drawItem(item_id: string, rng: Rng, instance_id: string, level: Level, avoid: readonly string[], fade: Fade): LivePuzzle {
   const base = { instance_id, outcomes: {}, tried: false, hints: 0, misses: 0 };
-  const item = REPAIRS[item_id];
+  const item = REPAIRS[item_id] ?? TEACH[item_id];
+  const worked = (make: () => WorkedInstance): LivePuzzle => ({ ...base, item: atFade(WORKED_TEACH[item_id]!, fade), template: "worked_example", n: make(), fade });
   switch (item_id) {
+    // Teach items from a second angle (R-05). The worked ones fade like the two-step worked example.
+    case "teach-inverse-undo-chain":
+      return worked(() => avoiding(rng, workedExample, avoid));
+    case "teach-one-step-worked":
+      return worked(() => oneStepWorked(rng, avoid));
+    case "teach-integer-number-line":
+      return worked(() => numberLineWorked(rng, level, avoid));
+    case "teach-integer-signs":
+      return worked(() => signWorked(rng, avoid));
+    case "teach-order-steps":
+      return worked(() => orderWorked(rng, level, avoid));
+    case "teach-order-spot":
+      return { ...base, item: item!, template: "spot_the_error", n: orderChain(rng, "precedence", level, avoid) };
+    case "teach-inverse-balance":
+    case "teach-one-step-balance": {
+      const n = oneStepBalance(rng, item_id === "teach-inverse-balance" ? "shift" : "split", avoid);
+      return { ...base, item: item!, template: "balance", n, pans: n.start };
+    }
+    case "teach-two-step-balance": {
+      const n = avoiding(rng, balance, avoid);
+      return { ...base, item: item!, template: "balance", n, pans: n.start };
+    }
     case "repair-two-step-coefficient":
       return { ...base, item: item!, template: "missing_step", n: lastStep(rng, level, avoid) };
     case "repair-inverse-undo":
@@ -786,7 +1408,7 @@ function drawItem(item_id: string, rng: Rng, instance_id: string, level: Level, 
   const template = (Object.keys(ITEMS) as PuzzleTemplate[]).find((t) => ITEMS[t].item_id === item_id);
   if (!template) throw new Error(`no item ${item_id}`);
   for (;;) {
-    const live = newPuzzle(template, rng, instance_id);
+    const live = newPuzzle(template, rng, instance_id, fade);
     if (!isOneOf(live.n.latex, avoid)) return live;
   }
 }
@@ -840,14 +1462,13 @@ export function toWire(live: LivePuzzle, skin: Skin): Puzzle {
 /** A worked example's lines and "why" at its fade. Steps the student writes are left out entirely. */
 function walkthrough(live: Extract<LivePuzzle, { template: "worked_example" }>, skin: Skin): Pick<WorkedExamplePuzzle, "steps" | "why"> {
   const say = (text: string) => line(live, skin, () => text);
+  const w = live.item.walkthrough;
   const [first, last] = live.n.linesLatex;
-  const step = (latex: string, i: number, shown: boolean) => (shown ? { latex, reason: say(WALKTHROUGH.reasons[i]!) } : null);
+  const step = (latex: string, i: 0 | 1, shown: boolean) => (shown ? { latex, reason: say(w.reasons[i]) } : null);
   return {
     // Backward fading: the last step goes to the student first.
     steps: [step(first, 0, live.fade < 2), step(last, 1, live.fade < 1)],
-    why: live.fade === 0
-      ? { question: say(WALKTHROUGH.why), choices: live.n.order.map((k) => say(WALKTHROUGH.choices[k]!.text)) }
-      : null,
+    why: live.fade === 0 ? { question: say(w.why), choices: live.n.order.map((k) => say(w.choices[k]!.text)) } : null,
   };
 }
 
@@ -940,27 +1561,69 @@ export function gradeMove(live: LivePuzzle, move: PuzzleMove, skin: Skin): Verdi
       const stage = workedStage(shown, live.outcomes);
       // Solved when this check passing leaves nothing else to do.
       const finishes = (check: CheckId) => workedStage(shown, { ...live.outcomes, [check]: "correct" }) === "done";
+      // A slip key the item has no ask for gets the item's general ask, so a generator's slip never crashes a session.
+      const known = (key: string, fallback: string) => (key === "correct" || key === "unreadable" || key in live.item.asks ? key : fallback);
       if (move.check === "why" && stage === "why") {
         const k = n.order[move.choice];
-        const choice = k === undefined ? undefined : WALKTHROUGH.choices[k];
+        const choice = k === undefined ? undefined : live.item.walkthrough.choices[k];
         if (!choice) return null;
         return choice.ask ? miss("why", choice.ask) : pass("why", finishes("why"));
       }
       if (move.check === "first_step" && stage === "first_step") {
-        // Dividing first is a fine path too, just a harder one.
-        const key = sameLine(move.text, n.divideFirst) ? "correct" : firstMove(move.text, n);
+        const key = known(n.kind === "equation" ? workedFirst(move.text, n) : workedWorkingFirst(move.text, n), "other");
         if (key === "correct") return pass("first_step", finishes("first_step"));
         return key === "unreadable" ? unreadable("first_step") : miss("first_step", key);
       }
       if (move.check === "final_answer" && stage === "final_answer") {
-        // Taking the a away instead of dividing by it: 3x = 15 gives x = 12.
-        const key = finalAnswer(move.text, n.answer, [{ value: n.c - n.b - n.a, key: "subtracted_a" }]);
+        const key = known(n.kind === "equation" ? workedFinal(move.text, n) : workingFinal(move.text, n.answer, n.finalSlips), "final_other");
         if (key === "correct") return pass("final_answer", finishes("final_answer"));
         return key === "unreadable" ? unreadable("final_answer") : miss("final_answer", key);
       }
       return null;
     }
   }
+}
+
+/** The value in "x = 5", "5 = x" or "1x = 5", the solution written out; null for any other line. */
+function solutionLine(text: string): number | null {
+  const m = /^\s*(?:1?x\s*=\s*(-?\d+(?:\.\d+)?)|(-?\d+(?:\.\d+)?)\s*=\s*1?x)\s*$/i.exec(text);
+  return m ? Number(m[1] ?? m[2]) : null;
+}
+
+/** The first line of a worked example in x: the move shown, or another right first move. */
+function workedFirst(text: string, n: WorkedInstance): string {
+  const solved = `x = ${n.answer}`;
+  const value = bareNumber(text) ?? solutionLine(text);
+  // The answer straight away, as a line or a bare number, skips the step being asked for. On a
+  // one-step problem the first line already comes to x = answer, so there only the solution
+  // written out counts as skipping; on a two-step one, any line that says it does.
+  if ((value !== null && near(value, n.answer)) || (!sameLine(n.lines[0], solved) && sameLine(text, solved))) return "skipped";
+  if (!readable(text)) return "unreadable";
+  if ([n.lines[0], ...n.alsoFirst].some((l) => sameLine(text, l))) return "correct";
+  return n.firstSlips.find((s) => sameLine(text, s.line))?.key ?? "other";
+}
+
+/** True when one side of the line is x by itself ("x = 12 - 7", "5 = x", "1x = 5"). */
+function xAlone(text: string): boolean {
+  const parts = text.split("=");
+  return parts.length === 2 && parts.some((side) => /^\s*1?x\s*$/i.test(side));
+}
+
+/** The last line of a worked example in x: x alone. The first line again comes to the answer on a one-step problem, but isn't. */
+function workedFinal(text: string, n: WorkedInstance): string {
+  const key = finalAnswer(text, n.answer, n.finalSlips);
+  return key === "correct" && text.includes("=") && !xAlone(text) ? "not_alone" : key;
+}
+
+/** The first line of a worked-out expression: one step done, the rest left as it is. */
+function workedWorkingFirst(text: string, n: WorkedInstance): string {
+  const line = lineOf(text);
+  const value = bareNumber(line);
+  if (value === null) return "unreadable";
+  if (isNumeralText(line)) return near(value, n.answer) ? "skipped" : "other";
+  if (sameExpression(line, n.equation)) return "copied";
+  if (sameExpression(line, n.lines[0]) || sameSum(line, n.lines[0])) return "correct";
+  return n.firstSlips.find((s) => sameExpression(line, s.line) || sameSum(line, s.line))?.key ?? "other";
 }
 
 /** The first move on a*x + b = c, which takes the b off both sides. */
@@ -1053,7 +1716,11 @@ export function nextHint(live: LivePuzzle, skin: Skin): string | null {
 
 /** The puzzle works an expression out (the integer and order repairs): its lines are numbers, not x. */
 export function worksOut(live: LivePuzzle): boolean {
-  return (live.template === "spot_the_error" && live.n.kind === "working") || (live.template === "missing_step" && live.n.blank === "working");
+  return (
+    (live.template === "spot_the_error" && live.n.kind === "working") ||
+    (live.template === "missing_step" && live.n.blank === "working") ||
+    (live.template === "worked_example" && live.n.kind === "working")
+  );
 }
 
 /** The puzzle's problem in checker syntax, so a fresh problem can stay away from it (R-41). */

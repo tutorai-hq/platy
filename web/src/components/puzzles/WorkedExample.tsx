@@ -28,6 +28,8 @@ export function WorkedExample({ state, onMove, actions }: Props) {
   const writing = stage === "first_step" ? 0 : stage === "final_answer" ? 1 : null;
   const passed = (i: number) => outcomes[i === 0 ? "first_step" : "final_answer"] === "correct";
   const askWhy = puzzle.why !== null && seen === puzzle.steps.length;
+  // A worked-out expression (no x) ends on its value, not on x alone.
+  const valueOnly = !/x/i.test(puzzle.equation);
 
   const write = (i: number) => (text: string) => {
     setWritten((lines) => {
@@ -125,8 +127,8 @@ export function WorkedExample({ state, onMove, actions }: Props) {
       {stage === "final_answer" && (
         <LineEntry
           id="last-step"
-          prompt="Write the last line, with x alone on one side."
-          placeholder="Your last line"
+          prompt={valueOnly ? "Write the last line: the one number it comes to." : "Write the last line, with x alone on one side."}
+          placeholder={valueOnly ? "Your answer" : "Your last line"}
           button="Check my line"
           busy={busy}
           autoFocus={puzzle.steps[0] === null}

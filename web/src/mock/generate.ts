@@ -5,7 +5,7 @@ import { parseMathStrict } from "../math/parse";
 import { readAnswer } from "./answers";
 import { bareNumber, hasSolution, linearForm, near, sides } from "./grade";
 import { slipValues } from "./slips";
-import { firstWrong, numeralsIn, type Reduction, sameExpression, unbracketed, workOut } from "./working";
+import { firstWrong, numeralsIn, type Reduction, sameExpression, unbracketed, type Working, workOut } from "./working";
 
 // Mock-only problem generators for the puzzle templates. They follow each item's
 // generator rules (content/prompts/puzzle-v1.md), so every instance has whole-number answers
@@ -144,32 +144,53 @@ export function balance(rng: Rng): BalanceInstance {
 }
 
 export interface WorkedInstance extends Numbers {
-  /** a*x + b = c. */
+  /**
+   * "equation": the lines are in x and the last is "x = answer"; "working": an expression in
+   * numbers is worked out and the last line is its value.
+   */
+  kind: "equation" | "working";
+  /** The problem in checker syntax ("3*x + 4 = 19", "(-3)*(-4) - 5") and as LaTeX. */
   equation: string;
   latex: string;
-  /** The two lines of the solution: take b off, then divide by a. */
+  /** The two lines of the solution, in checker syntax and as LaTeX. */
+  lines: [string, string];
   linesLatex: [string, string];
-  /** The first step; the slip of adding b; and dividing first, a fine path, just a harder one. */
-  expected: string;
-  slip: string;
-  divideFirst: string;
+  /** Other right first lines (dividing first on a two-step equation: a fine path, just a harder one). */
+  alsoFirst: string[];
+  /** Wrong first lines known slips give, with the ask to use (R-40). */
+  firstSlips: { line: string; key: string }[];
+  /** Wrong final values known slips give. */
+  finalSlips: { value: number; key: string }[];
   /** The order the "why" choices are shown in, so the right one isn't always first. */
   order: number[];
+  /** Words for the item's text slots that depend on the instance, like which way to move. */
+  vars: Record<string, string | number>;
+}
+
+/** 0 to n-1 in a random order. */
+function shuffled(rng: Rng, n: number): number[] {
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = int(rng, 0, i);
+    [order[i], order[j]] = [order[j]!, order[i]!];
+  }
+  return order;
 }
 
 // The same numbers as a missing-step problem: a and b share no factor, so taking b off first
 // is the clean path and dividing first gives fractions.
 export function workedExample(rng: Rng): WorkedInstance {
   const { a, b, c, answer, equation, latex, expected, slip } = missingStep(rng);
-  const order = [0, 1, 2];
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = int(rng, 0, i);
-    [order[i], order[j]] = [order[j]!, order[i]!];
-  }
   return {
-    a, b, c, answer, equation, latex, expected, slip, order,
+    kind: "equation", a, b, c, answer, equation, latex, order: shuffled(rng, 3),
+    lines: [expected, `x = ${answer}`],
     linesLatex: [`${a}x = ${c - b}`, `x = ${answer}`],
-    divideFirst: `x + ${b}/${a} = ${c}/${a}`,
+    alsoFirst: [`x + ${b}/${a} = ${c}/${a}`],
+    // Adding b again, simplified or written out as "+ b + b".
+    firstSlips: [{ line: slip, key: "same_op" }, { line: `${a}*x + ${2 * b} = ${c + b}`, key: "same_op" }],
+    // Taking the a away instead of dividing by it: 3x = 15 gives x = 12.
+    finalSlips: [{ value: c - b - a, key: "subtracted_a" }],
+    vars: {},
   };
 }
 
@@ -710,5 +731,176 @@ export function oneStepBalance(rng: Rng, kind: "shift" | "split", avoid: readonl
       kind === "shift" ? near(a, 1) && b > 0 && answer !== b : Number.isInteger(a) && a > 1 && near(b, 0) && answer !== a;
     if (!fits || c > 30 || isOneOf(p.prompt, avoid)) return null;
     return { a, b, c, answer, latex: p.prompt, start: { left: { x: a, units: b }, right: { x: 0, units: c } } };
+  });
+}
+
+// Teach items from a second angle (R-05): worked examples on the other demo skills. Each has two
+// lines, as the player shows, with the words its reasons need.
+
+/** "Add", "Subtract", "Multiply" or "Divide" for an operation, and its lowercase -ing form. */
+const OP_WORDS: Record<Reduction["op"], { name: string; doing: string }> = {
+  "+": { name: "Add", doing: "adding" },
+  "-": { name: "Subtract", doing: "taking away" },
+  "*": { name: "Multiply", doing: "multiplying" },
+  "/": { name: "Divide", doing: "dividing" },
+};
+
+/** A reduction written the way the child sees it: "3 × 4", "-3 + 7". */
+function stepText(r: Reduction): string {
+  const num = (v: number) => (v < 0 ? `(${v})` : String(v));
+  const sym = r.op === "*" ? "\\times" : r.op === "/" ? "\\div" : r.op;
+  return `${num(r.left)} ${sym} ${num(r.right)}`;
+}
+
+/** A two-line worked-out expression from its working, with the slots every working item fills. */
+function workedOut(expression: string, w: Working, extra: Pick<WorkedInstance, "firstSlips" | "finalSlips" | "vars"> & Partial<Numbers>, rng: Rng): WorkedInstance | null {
+  const [r1, r2] = w.reductions;
+  if (!r1 || !r2 || w.lines.length !== 2) return null;
+  const [first, last] = w.lines as [string, string];
+  const answer = r2.value;
+  return {
+    kind: "working",
+    a: extra.a ?? r1.left, b: extra.b ?? r1.right, c: extra.c ?? r2.right, answer,
+    equation: expression,
+    latex: childMathToLatex(expression),
+    lines: [first, last],
+    linesLatex: [childMathToLatex(first), childMathToLatex(last)],
+    alsoFirst: [],
+    firstSlips: extra.firstSlips.filter((s) => !sameExpression(s.line, first)),
+    finalSlips: extra.finalSlips.filter((s) => !near(s.value, answer)),
+    order: shuffled(rng, 3),
+    vars: { step1: stepText(r1), step2: stepText(r2), mid: r1.value, ...extra.vars },
+  };
+}
+
+/**
+ * Number line moves (R-05, integer_arithmetic from the visual angle): "a ± b ± c" from the integer
+ * generator at the student's level (capped at 2, since level 3 is products), worked out one move
+ * at a time. Adding moves right, taking away moves left.
+ */
+export function numberLineWorked(rng: Rng, level: Level, avoid: readonly string[] = []): WorkedInstance {
+  const at: Level = level === 3 ? 2 : level;
+  return draw(rng, (r) => {
+    const p = makeProblem("integer_arithmetic", at, r);
+    const m = /^(-?\d+) ([+-]) (\d+) ([+-]) (\d+)$/.exec(p.prompt);
+    const w = workOut(p.prompt, "usual");
+    if (!m || !w || w.lines.length !== 2 || clashes(p.prompt, avoid) || showsAnswer([p.prompt, w.lines[0]!], p.answer)) return null;
+    const [n1, n2, n3] = [Number(m[1]), Number(m[3]), Number(m[5])];
+    const [op1, op2] = [m[2]!, m[4]!];
+    const mid = w.reductions[0]!.value;
+    if (mid === 0 || mid === p.answer) return null;
+    const dir = (op: string) => (op === "+" ? "right" : "left");
+    // Each move the wrong way, and the sign lost at the end.
+    const wrongMid = op1 === "+" ? n1 - n2 : n1 + n2;
+    const wrongEnd = op2 === "+" ? mid - n3 : mid + n3;
+    return workedOut(p.prompt, w, {
+      a: n1, b: n2, c: n3,
+      firstSlips: [{ line: `${wrongMid} ${op2} ${n3}`, key: "wrong_way" }],
+      finalSlips: [{ value: wrongEnd, key: "wrong_way" }, { value: -p.answer, key: "sign_lost" }],
+      vars: { start: n1, dir1: dir(op1), dir2: dir(op2), other1: dir(op1 === "+" ? "-" : "+"), sign1: op1, sign2: op2 },
+    }, r);
+  });
+}
+
+/**
+ * Sign patterns (R-05, integer_arithmetic from the worked angle): a product of two signed numbers
+ * with one more thing to do, "(-3)*(-4) - 5", so the rule for the signs is the first step.
+ */
+export function signWorked(rng: Rng, avoid: readonly string[] = []): WorkedInstance {
+  return draw(rng, (r) => {
+    const [a, b, c] = [int(r, 2, 9), int(r, 2, 9), int(r, 1, 20)];
+    const form = int(r, 0, 2);
+    const product = form === 0 ? `(-${a})*(-${b})` : form === 1 ? `${a}*(-${b})` : `(-${a})*${b}`;
+    const op = r() < 0.5 ? "+" : "-";
+    const expression = `${product} ${op} ${c}`;
+    const w = workOut(expression, "usual");
+    if (!w || w.lines.length !== 2 || clashes(expression, avoid)) return null;
+    const value = w.reductions[0]!.value;
+    const answer = w.reductions[1]!.value;
+    if (answer === 0 || showsAnswer([expression, w.lines[0]!], answer)) return null;
+    const rule = form === 0 ? "A negative times a negative is positive" : "A negative times a positive is negative";
+    return workedOut(expression, w, {
+      a, b, c,
+      // The product's sign wrong, then the rest done right; and the sign lost at the end.
+      firstSlips: [{ line: `${-value} ${op} ${c}`, key: "product_sign" }],
+      finalSlips: [{ value: op === "+" ? -value + c : -value - c, key: "product_sign" }, { value: -answer, key: "sign_lost" }],
+      vars: { rule, product_sign: value < 0 ? "negative" : "positive", signs: form === 0 ? "two negatives" : "one negative", then: OP_WORDS[op === "+" ? "+" : "-"].doing },
+    }, r);
+  });
+}
+
+/**
+ * Each step named (R-05, order_of_operations from the worked angle): a problem at the student's
+ * level (capped at 2, since level 3 has five lines) with exactly two steps, so the reasons can
+ * name what came first and why.
+ */
+export function orderWorked(rng: Rng, level: Level, avoid: readonly string[] = []): WorkedInstance {
+  const at: Level = level === 3 ? 2 : level;
+  return draw(rng, (r) => {
+    const p = makeProblem("order_of_operations", at, r);
+    const w = workOut(p.prompt, "usual");
+    if (!w || w.lines.length !== 2 || clashes(p.prompt, avoid) || showsAnswer([p.prompt, w.lines[0]!], p.answer)) return null;
+    const [r1, r2] = w.reductions as [Reduction, Reduction];
+    const brackets = p.prompt.includes("(");
+    // Left to right instead, where that changes anything.
+    const ltr = workOut(p.prompt, "left_to_right");
+    const ltrLine = ltr?.lines[0];
+    const ltrValue = ltr ? bareNumber(ltr.lines[ltr.lines.length - 1]!) : null;
+    return workedOut(p.prompt, w, {
+      firstSlips: ltrLine !== undefined ? [{ line: ltrLine, key: "left_first" }] : [],
+      finalSlips: ltrValue !== null ? [{ value: ltrValue, key: "left_first" }] : [],
+      vars: {
+        first_name: brackets ? "Brackets" : OP_WORDS[r1.op].name,
+        first_rule: brackets ? "Brackets come before everything else" : "Multiplying and dividing come before adding and taking away",
+        then: OP_WORDS[r2.op].doing,
+      },
+    }, r);
+  });
+}
+
+/**
+ * The same move on both sides (R-05, one_step_equations from the worked angle): a level 1
+ * one-step problem with the undoing move written out on both sides, then x alone.
+ */
+export function oneStepWorked(rng: Rng, avoid: readonly string[] = []): WorkedInstance {
+  return draw(rng, (r) => {
+    const p = makeProblem("one_step_equations", 1, r);
+    const m = /^(?:(\d+)x|x ([+-]) (\d+)) = (\d+)$/.exec(p.prompt);
+    if (!m || isOneOf(p.prompt, avoid) || showsAnswer([p.prompt], p.answer)) return null;
+    const { a, b, c, answer } = numbersOf(p);
+    const solved = `x = ${answer}`;
+    if (m[1] !== undefined) {
+      // ax = c: divide both sides by a.
+      const line = `${a}*x/${a} = ${c}/${a}`;
+      return {
+        kind: "equation", a, b, c, answer, equation: `${a}*x = ${c}`, latex: p.prompt, order: shuffled(r, 3),
+        lines: [line, solved],
+        linesLatex: [childMathToLatex(`${a}x/${a} = ${c}/${a}`), solved],
+        alsoFirst: [],
+        firstSlips: [{ line: `${a}*x - ${a} = ${c} - ${a}`, key: "subtracted_a" }, { line: `${a}*x*${a} = ${c}*${a}`, key: "multiplied" }],
+        finalSlips: [{ value: c - a, key: "subtracted_a" }, { value: c * a, key: "multiplied" }],
+        vars: { n: a, does: `multiplies $x$ by $${a}$`, undo: `divide both sides by $${a}$`, undo_word: "dividing", wrong_word: "taking away" },
+      };
+    }
+    // x + b = c or x - b = c: take b off, or add it to, both sides.
+    const sign = m[2]!;
+    const n = Number(m[3]);
+    const [undo, wrong] = sign === "+" ? ["-", "+"] : ["+", "-"];
+    const line = `x ${sign} ${n} ${undo} ${n} = ${c} ${undo} ${n}`;
+    return {
+      kind: "equation", a, b, c, answer, equation: `x ${sign} ${n} = ${c}`, latex: p.prompt, order: shuffled(r, 3),
+      lines: [line, solved],
+      linesLatex: [line, solved],
+      alsoFirst: [],
+      firstSlips: [{ line: `x ${sign} ${n} ${wrong} ${n} = ${c} ${wrong} ${n}`, key: "wrong_way" }],
+      finalSlips: [{ value: sign === "+" ? c + n : c - n, key: "wrong_way" }],
+      vars: {
+        n,
+        does: sign === "+" ? `adds $${n}$ to $x$` : `takes $${n}$ away from $x$`,
+        undo: sign === "+" ? `take $${n}$ off both sides` : `add $${n}$ to both sides`,
+        undo_word: sign === "+" ? "taking away" : "adding",
+        wrong_word: sign === "+" ? "adding" : "taking away",
+      },
+    };
   });
 }

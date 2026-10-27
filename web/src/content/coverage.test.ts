@@ -20,7 +20,8 @@ describe("content coverage grid (R-37)", () => {
 
   it("fills each cell from the catalog alone, and counts a demo node's generator as practice", () => {
     expect(cell("two_step_equations", "repair").items).toEqual(["lin2-balance", "lin2-missing-step", "lin2-undo-sign-spot-error", "repair-two-step-coefficient"]);
-    expect(cell("two_step_equations", "teach").items).toEqual(["lin2-worked-example"]);
+    expect(cell("two_step_equations", "teach").items).toEqual(["lin2-worked-example", "teach-two-step-balance"]);
+    expect(cell("inverse_operations", "teach").items).toEqual(["teach-inverse-balance", "teach-inverse-undo-chain"]);
     expect(cell("inverse_operations", "practice")).toMatchObject({ items: [], generator: [1, 2, 3] });
     expect(cell("reciprocals", "practice")).toMatchObject({ items: [], generator: null });
     expect(isEmpty(cell("reciprocals", "practice"))).toBe(true);
@@ -46,7 +47,10 @@ describe("content coverage grid (R-37)", () => {
     for (const g of grid.demoGaps) expect(g.roles).toEqual(ROLES.filter((r) => isEmpty(cell(g.node, r))));
     expect(grid.demoGaps.find((g) => g.node === "two_step_equations")!.roles).toEqual(["review", "apply", "hook"]);
     expect(grid.slipsWithoutRepair).toEqual([]);
-    expect(grid.oneAngle.map((n) => [n.node, n.angle])).toEqual([["integer_arithmetic", "worked"], ["order_of_operations", "worked"], ["inverse_operations", "balance"]]);
+    // R-05: every demo skill has two angles now; a catalog with one would be listed here.
+    expect(grid.oneAngle).toEqual([]);
+    const only = coverage({ ...defaultInputs(), items: CATALOG.filter((d) => d.skills.primary !== "inverse_operations" || d.angle === "undo") });
+    expect(only.oneAngle.map((n) => [n.node, n.angle])).toEqual([["inverse_operations", "undo"]]);
     const broken = coverage({ ...defaultInputs(), slips: [{ id: "s", node: "reciprocals", repair: "repair-not-built" }] });
     expect(broken.slipsWithoutRepair).toEqual([{ id: "s", node: "reciprocals", repair: "repair-not-built" }]);
     const listed = coverage({ ...defaultInputs(), toBuild: new Set(["repair-order-brackets"]) });

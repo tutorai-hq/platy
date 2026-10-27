@@ -281,6 +281,8 @@ export const PROBE_ASK = "Just your best try.";
 // The buttons to a detour (`next_up`), so the student reads why before the screen changes (R-01).
 export const DETOUR_PROBE = "Quick check";
 export const DETOUR_PROBE_DEEPER = "Next quick check";
+/** The explanation didn't land: the same skill again, from a different angle (R-05). */
+export const SWITCH_ANGLE = "Still tricky. Let me show it another way.";
 export const DETOUR_TEACH = "Show me how";
 export const DETOUR_BACK = "Back to my problem";
 export const DETOUR_PUZZLE = "Quick puzzle";

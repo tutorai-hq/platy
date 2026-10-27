@@ -99,9 +99,13 @@ describe("worked example generator", () => {
     for (const seed of SEEDS) {
       const p = workedExample(seeded(seed));
       expect(hasSolution(p.equation, p.answer), p.equation).toBe(true);
-      expect(hasSolution(p.expected, p.answer)).toBe(true);
-      expect(hasSolution(p.divideFirst, p.answer)).toBe(true);
-      expect(hasSolution(p.slip, p.answer)).toBe(false);
+      expect(p.kind).toBe("equation");
+      expect(hasSolution(p.lines[0], p.answer)).toBe(true);
+      expect(p.lines[1]).toBe(`x = ${p.answer}`);
+      for (const other of p.alsoFirst) expect(hasSolution(other, p.answer)).toBe(true);
+      // Adding b again: simplified, and written out as "+ b + b" (a true line, but not the move).
+      expect(p.firstSlips).toEqual([{ line: `${p.a}*x = ${p.c + p.b}`, key: "same_op" }, { line: `${p.a}*x + ${2 * p.b} = ${p.c + p.b}`, key: "same_op" }]);
+      for (const slip of p.finalSlips) expect(slip.value).not.toBe(p.answer);
       expect(p.linesLatex).toEqual([`${p.a}x = ${p.c - p.b}`, `x = ${p.answer}`]);
       expect([...p.order].sort()).toEqual([0, 1, 2]);
     }

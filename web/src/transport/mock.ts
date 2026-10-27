@@ -1,4 +1,5 @@
 import { skillOf, templateOf } from "../content/catalog";
+import { pickTeachItem } from "../mock/teach";
 import { REASON_CODES, STEP_CODES } from "../content/confidence";
 import type { PaletteId, PuzzleMove, PuzzleTemplate } from "../content/types";
 import { answerExample, checkAnswer, matchesValue, readAnswer } from "../mock/answers";
@@ -15,7 +16,7 @@ import {
   BACK_TO_IT, CLOSING, CONFIDENCE_ASK, CONFIDENCE_ASK_LATE, CONFIDENCE_CHAT, CONFIDENCE_REPLIES, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, KEY_STEP_ASK, KEY_STEP_CHAT, KEY_STEP_REPLIES, KEY_STEP_REPLY_NONE, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OFF_TOPIC, OPENING,
   OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
   PUZZLE_UNREADABLE, PUZZLE_UNREADABLE_VALUE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SEE_MAP, SHOW_ONE, STEP_IN_LINES,
-  STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, STEP_UNREADABLE_VALUE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
+  STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, STEP_UNREADABLE_VALUE, SWITCH_ANGLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
 } from "../mock/script";
 import type { ClientEvent, ServerEvent, SessionMode } from "../protocol";
 import type { DemoTrigger, TutorTransport } from "./types";
@@ -101,6 +102,10 @@ export class MockTransport implements TutorTransport {
   private probe: { origin: ScriptedProblem; chain: string[]; problem: ScriptedProblem } | null = null;
   private probed = false;
   private gap: string | null = null;
+  /** The angles already used to teach each skill this session, so a retry takes a different one (R-05). */
+  private readonly anglesTried = new Map<string, string[]>();
+  /** The skill last taught and the problem it went back to: a miss there means the explanation didn't land. */
+  private lastTaught: { node: string; origin: ScriptedProblem } | null = null;
   /**
    * A detour that waits for the student's tap (`next_up`, then `continue`), so they read why before
    * the screen changes (R-01). Answers and lines wait too; the chat stays open.
@@ -376,6 +381,9 @@ export class MockTransport implements TutorTransport {
         const item = repair ? itemFor(repair) : null;
         const player = item ? templateOf(item.item_id) : null;
         const below = PROBE_BELOW[p.skill_id];
+        // Back on the problem after a skill was taught, and still missing it: an angle not tried yet, if there is one.
+        const taught = this.lastTaught;
+        const retry = taught && taught.origin === p && pickTeachItem(taught.node, this.anglesTried.get(taught.node) ?? []) ? taught.node : null;
         if (below && !this.probed) {
           // The first miss: find out what's underneath before teaching anything (R-01).
           this.probed = true;
@@ -391,6 +399,10 @@ export class MockTransport implements TutorTransport {
           const lines = [...this.stepLines];
           await this.say(STEP_REPAIR_LEAD);
           this.offer(DETOUR_PUZZLE, () => this.startPuzzle(player, null, item.item_id, lines));
+        } else if (retry !== null) {
+          // The explanation didn't land: the same skill again, from a different angle (R-05).
+          await this.say(SWITCH_ANGLE);
+          this.offer(DETOUR_TEACH, () => this.teachGap(p, retry));
         } else if (this.misses >= 3 && !this.pivoted) {
           await this.suggestPause(); // R-21, as for a problem's answers
         } else if (this.misses === 1) {
@@ -449,6 +461,7 @@ export class MockTransport implements TutorTransport {
     this.index++;
     this.current = null;
     this.probe = null;
+    this.lastTaught = null;
     this.stepLines = [];
     const next = this.order[this.index];
     if (next) this.think("pose_problem", "path_next", next.skill_id);
@@ -525,7 +538,7 @@ export class MockTransport implements TutorTransport {
     this.puzzles++;
     const rng = seeded(this.seed + this.puzzles);
     const id = `${template}-${this.puzzles}`;
-    const live = item ? newItemPuzzle(item, rng, id, this.level, [...this.lessonPrompts(), ...avoid]) : newPuzzle(template, rng, id, fade);
+    const live = item ? newItemPuzzle(item, rng, id, this.level, [...this.lessonPrompts(), ...avoid], fade) : newPuzzle(template, rng, id, fade);
     this.puzzle = live;
     await this.say(line(live, this.skin(), (i) => i.intro));
     this.out({ type: "puzzle", puzzle: toWire(live, this.skin()) });
@@ -630,7 +643,7 @@ export class MockTransport implements TutorTransport {
     await this.sleep(this.timing.resetMs);
     // A worked example fades one step at a time before the lesson picks up again (R-37).
     if (live.template === "worked_example" && live.fade < 2) {
-      await this.showPuzzle("worked_example", (live.fade + 1) as Fade);
+      await this.showPuzzle("worked_example", (live.fade + 1) as Fade, live.item.item_id);
       return;
     }
     const back = this.returnTo;
@@ -647,6 +660,8 @@ export class MockTransport implements TutorTransport {
     if (this.gap) {
       this.primer.taught(this.gap);
       this.retaught = true;
+      // A miss on the problem it goes back to means this explanation didn't land (R-05).
+      if (back) this.lastTaught = { node: this.gap, origin: back };
     }
     if (back) this.think("pose_problem", this.gap ? "gap_taught" : "back_to_problem", back.skill_id);
     this.gap = null;
@@ -826,14 +841,22 @@ export class MockTransport implements TutorTransport {
     await this.present(origin, [BACK_TO_IT], true);
   }
 
-  /** Teach the gap with a worked example, then go back to the problem that showed it. */
+  /**
+   * Teach the gap, then go back to the problem that showed it. The first time it's the skill's
+   * worked example; a second time on the same skill takes an angle not tried yet (R-05).
+   */
   private async teachGap(origin: ScriptedProblem, gap: string): Promise<void> {
     this.probe = null;
     this.gap = gap;
+    this.lastTaught = null;
+    const tried = this.anglesTried.get(gap) ?? [];
+    const item = pickTeachItem(gap, tried) ?? pickTeachItem(gap, []);
+    if (item) this.anglesTried.set(gap, [...tried, item.angle]);
     this.primer.hypothesize("gap_found", gap);
-    this.think("teach", "gap_found", gap);
-    this.current = origin; // the worked example returns here
-    await this.startPuzzle("worked_example", null);
+    this.think("teach", tried.length === 0 ? "gap_found" : "switch_angle", gap);
+    this.current = origin; // the explanation returns here
+    if (item) await this.startPuzzle(item.template, null, item.id);
+    else await this.startPuzzle("worked_example", null);
   }
 
   /** A hard reset between two things on screen (R-17, A-4). */

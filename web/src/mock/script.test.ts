@@ -36,7 +36,7 @@ for (const [name, value] of Object.entries(script)) {
 collect(script.confirmProblem("g1", "two_step_equations", "4x + 3 = 19", 4, "4"), "confirmProblem", LINES);
 collect(script.confirmProblem("g2", "order_of_operations", "20 - 3*(4 + 2)", 2, "2"), "confirmProblem.value", LINES);
 collect(script.probeProblem("one_step_equations"), "probeProblem", LINES);
-for (const name of ["ITEMS", "WORKED_FADES", "WALKTHROUGH", "REPAIRS"] as const) collect(puzzles[name], name, LINES);
+for (const name of ["ITEMS", "WORKED_FADES", "WALKTHROUGH", "REPAIRS", "TEACH"] as const) collect(puzzles[name], name, LINES);
 collect(words.encouragement, "map.encouragement", LINES);
 // R-30: the confidence check's taps, asks and the map's calibration lines are child-facing too.
 collect(confidence, "confidence", LINES);

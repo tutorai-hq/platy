@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
-import { isOneOf, type Level, LEVELS, seeded } from "../mock/generate";
-import { INTERESTS, ITEMS, newItemPuzzle, newPuzzle, problemOf, REPAIRS, SKINS, toWire, WORKED_FADES } from "../mock/puzzles";
+import { DEMO_NODES, isOneOf, type Level, LEVELS, seeded } from "../mock/generate";
+import { INTERESTS, ITEMS, newItemPuzzle, newPuzzle, problemOf, REPAIRS, SKINS, TEACH, toWire, WORKED_FADES } from "../mock/puzzles";
 import { sameExpression } from "../mock/working";
 import raw from "./catalog.json";
 import {
@@ -79,7 +79,7 @@ describe("item catalog (R-37)", () => {
     for (const i of INTERESTS) if (i !== "neutral") expect(INTEREST_TAGS).toContain(i);
     expect(problemsOf((d) => ({ ...d, role: "quiz" }))).toEqual(["repair-order-brackets: role must be one of teach, practice, repair, review, apply, hook"]);
     expect(problemsOf((d) => ({ ...d, format: "video" }))).toContain("repair-order-brackets: format must be one of puzzle, worked_example, story, reel");
-    expect(problemsOf((d) => ({ ...d, angle: "fun" }))).toEqual(["repair-order-brackets: angle must be one of balance, undo, worked, story, visual"]);
+    expect(problemsOf((d) => ({ ...d, angle: "fun" }))).toEqual(["repair-order-brackets: angle must be one of balance, undo, worked, story, visual, contrast"]);
     expect(problemsOf((d) => ({ ...d, status: "ready" }))).toEqual(["repair-order-brackets: status must be one of draft, live"]);
     expect(problemsOf((d) => ({ ...d, template: "worked_example" }))).toEqual(["repair-order-brackets: a puzzle's template must be a puzzle player"]);
     expect(problemsOf((d) => ({ ...d, format: "reel", template: "balance" }))).toEqual(["repair-order-brackets: a reel has no template"]);
@@ -101,10 +101,20 @@ describe("item catalog (R-37)", () => {
   });
 
   it("has exactly one descriptor for every item the mock runs, and no descriptor without an item", () => {
-    const mockIds = new Set([...Object.values(ITEMS), ...Object.values(REPAIRS), ...WORKED_FADES].map((i) => i.item_id));
+    const mockIds = new Set([...Object.values(ITEMS), ...Object.values(REPAIRS), ...Object.values(TEACH), ...WORKED_FADES].map((i) => i.item_id));
     expect([...mockIds].sort()).toEqual(CATALOG.map((d) => d.id).sort());
     // The three fades of the worked example are one item.
     expect(WORKED_FADES.map((i) => i.item_id)).toEqual(["lin2-worked-example", "lin2-worked-example", "lin2-worked-example"]);
+  });
+
+  it("gives every demo skill teach items from at least two angles, so an explanation that doesn't land has another (R-05)", () => {
+    for (const node of DEMO_NODES) {
+      const teach = CATALOG.filter((d) => d.role === "teach" && d.skills.primary === node);
+      const angles = new Set(teach.map((d) => d.angle));
+      expect(angles.size, node).toBeGreaterThanOrEqual(2);
+      // Every teach item runs on a player the mock has.
+      for (const d of teach) expect(d.template, d.id).not.toBeNull();
+    }
   });
 
   it("is where the mock gets an item's skill and player from", () => {
@@ -113,7 +123,7 @@ describe("item catalog (R-37)", () => {
       const p = newPuzzle(template, seeded(3), "i-1");
       expect(toWire(p, SKINS.neutral).skill_id).toBe(descriptorFor(item.item_id)!.skills.primary);
     }
-    for (const id of Object.keys(REPAIRS)) {
+    for (const id of [...Object.keys(REPAIRS), ...Object.keys(TEACH)]) {
       const d = descriptorFor(id)!;
       expect(templateOf(id)).toBe(d.template);
       const p = newItemPuzzle(id, seeded(3), "r-1", d.difficulty.min as Level);

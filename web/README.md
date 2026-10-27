@@ -87,9 +87,11 @@ by" screen, which holds until you reload the page.
    thinking**: a dark panel beside the chat shows mastery per skill on the path, the primer's
    hypothesis, and a reason for each move, newest first (laptops only). Then on `2x + 5 = 17`:
    write `2x = 99`, and Platy probes one level down (`x - 8 = -3`, answer `-11`), then one more
-   (`x - 4 + b = x`, answer `-4`). That's the gap: a worked example teaches it, three fades
-   (**Demo → Skip** moves through them). Back on `2x + 5 = 17`, write `2x = 22`: a repair puzzle
-   on that one move, then a fresh generated problem confirms the fix. Before Platy says whether
+   (`x - 4 + b = x`, answer `-4`). That's the gap: a worked example teaches it as an undo chain,
+   three fades (**Demo → Skip** moves through them). Back on `2x + 5 = 17`, another unexplained
+   wrong line (say `2x = 98`) gets the same skill from a different angle, a balance scale, never
+   the same explanation again (R-05); the panel says `switch_angle`. Write `2x = 22` instead: a
+   repair puzzle on that one move, then a fresh generated problem confirms the fix. Before Platy says whether
    that fresh problem is right, it asks how sure you are (R-30): three taps, **Guessing**, **Fairly
    sure** or **Certain**, then what made you sure, from a short list; the verdict comes after
    (R-02). That's the session's one confidence check. A session that gets to its end without one
@@ -216,6 +218,11 @@ with `slips.json`'s repairs all fail, and the mock reads an item's skill and pla
 item is ever built on a skill-map probe's equation (R-01): the generators re-draw past one, and
 `src/content/catalog.test.ts` checks every item over every level and seed.
 `docs/proposals/item-descriptor.md` lists the fields and the open questions for Connor.
+Every demo skill has teach items from two angles (R-05; `TEACH` in `src/mock/puzzles.ts`): a
+worked example first, then a balance scale, a number line, a sign rule or a wrong solution to
+find the slip in. The worked ones fade like the two-step worked example and carry their own
+reasons and "why". `src/mock/teach.ts` picks the first teach item on a skill whose angle hasn't
+been tried this session, standing in for the server's selector, which needs that input.
 `npm --prefix web run coverage` writes `docs/content/coverage.md`, the skill × role grid of what
 the catalog covers (with the mock's generators counted as practice), the demo path's gaps, slips
 with no repair and skills with only one angle; `src/content/coverage.test.ts` fails while that

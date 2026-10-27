@@ -14,7 +14,8 @@ export const STATUSES = ["draft", "live"] as const;
 export const FORMATS = ["puzzle", "worked_example", "story", "reel"] as const;
 export const TEMPLATES = ["spot_the_error", "missing_step", "balance", "worked_example"] as const;
 export const ROLES = ["teach", "practice", "repair", "review", "apply", "hook"] as const;
-export const ANGLES = ["balance", "undo", "worked", "story", "visual"] as const;
+/** How an item explains: a balance scale, undoing, a worked solution, a story, a picture, or a wrong solution to find the slip in. */
+export const ANGLES = ["balance", "undo", "worked", "story", "visual", "contrast"] as const;
 /** The interest skins the mock has (R-38). "neutral" is the absence of a tag, not a tag. */
 export const INTEREST_TAGS = ["soccer", "football", "gaming"] as const;
 /** The generators' levels (R-41). */

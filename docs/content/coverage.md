@@ -6,22 +6,22 @@ Skill-map nodes in map order, one column per role. A cell lists the items whose 
 (`web/src/content/catalog.json`, R-37); `generator` is the mock's problem generator (R-41) at its levels;
 — is empty.
 
-15 items; 11 of 96 cells filled.
+24 items; 15 of 96 cells filled.
 
 | Skill | teach | practice | repair | review | apply | hook |
 |---|---|---|---|---|---|---|
-| **Integer arithmetic**<br>`integer_arithmetic` | — | generator L1–L3 | repair-integer-signs, repair-integer-subtraction | — | — | — |
-| **Order of operations**<br>`order_of_operations` | — | generator L1–L3 | repair-order-brackets, repair-order-precedence | — | — | — |
+| **Integer arithmetic**<br>`integer_arithmetic` | teach-integer-number-line, teach-integer-signs | generator L1–L3 | repair-integer-signs, repair-integer-subtraction | — | — | — |
+| **Order of operations**<br>`order_of_operations` | teach-order-spot, teach-order-steps | generator L1–L3 | repair-order-brackets, repair-order-precedence | — | — | — |
 | **Fraction operations**<br>`fraction_operations` | — | — | — | — | — | — |
 | **Reciprocals**<br>`reciprocals` | — | — | — | — | — | — |
-| **Inverse operations**<br>`inverse_operations` | — | generator L1–L3 | repair-inverse-divide, repair-inverse-undo | — | — | — |
+| **Inverse operations**<br>`inverse_operations` | teach-inverse-balance, teach-inverse-undo-chain | generator L1–L3 | repair-inverse-divide, repair-inverse-undo | — | — | — |
 | **Combining like terms**<br>`combining_like_terms` | — | — | — | — | — | — |
 | **Distributive property**<br>`distributive_property` | — | — | — | — | — | — |
 | **Simplifying expressions**<br>`simplifying_expressions` | — | — | — | — | — | — |
 | **Writing expressions**<br>`writing_expressions` | — | — | — | — | — | — |
-| **One-step equations**<br>`one_step_equations` | — | generator L1–L3 | 4 items[^1] | — | — | — |
+| **One-step equations**<br>`one_step_equations` | teach-one-step-balance, teach-one-step-worked | generator L1–L3 | 4 items[^1] | — | — | — |
 | **Equations with a fraction coefficient**<br>`fraction_coefficient_equations` | — | — | — | — | — | — |
-| **Two-step equations**<br>`two_step_equations` | lin2-worked-example | generator L1–L3 | 4 items[^2] | — | — | — |
+| **Two-step equations**<br>`two_step_equations` | lin2-worked-example, teach-two-step-balance | generator L1–L3 | 4 items[^2] | — | — | — |
 | **Multi-step equations**<br>`multi_step_equations` | — | — | — | — | — | — |
 | **Equations with fractions**<br>`equations_with_fractions` | — | — | — | — | — | — |
 | **Variables on both sides**<br>`variables_both_sides` | — | — | — | — | — | — |
@@ -29,10 +29,10 @@ Skill-map nodes in map order, one column per role. A cell lists the items whose 
 
 ## Demo-path gaps
 
-- **Integer arithmetic** (`integer_arithmetic`): teach, review, apply, hook
-- **Order of operations** (`order_of_operations`): teach, review, apply, hook
-- **Inverse operations** (`inverse_operations`): teach, review, apply, hook
-- **One-step equations** (`one_step_equations`): teach, review, apply, hook
+- **Integer arithmetic** (`integer_arithmetic`): review, apply, hook
+- **Order of operations** (`order_of_operations`): review, apply, hook
+- **Inverse operations** (`inverse_operations`): review, apply, hook
+- **One-step equations** (`one_step_equations`): review, apply, hook
 - **Two-step equations** (`two_step_equations`): review, apply, hook
 
 ## Slips with no repair
@@ -41,9 +41,7 @@ None.
 
 ## Skills with one angle
 
-- **Integer arithmetic** (`integer_arithmetic`): worked
-- **Order of operations** (`order_of_operations`): worked
-- **Inverse operations** (`inverse_operations`): balance
+None.
 
 [^1]: repair-one-step-coefficient, repair-one-step-direction, repair-one-step-multiply, repair-one-step-sign
 [^2]: lin2-balance, lin2-missing-step, lin2-undo-sign-spot-error, repair-two-step-coefficient

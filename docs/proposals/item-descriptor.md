@@ -17,7 +17,7 @@
 | `role` | `teach`, `practice`, `repair`, `review`, `apply`, `hook` | teach (worked example), repair (the rest) |
 | `skills` | `{primary, touches[]}`, skill-map node ids; every touch is in the primary's prerequisite chain (A-6) | |
 | `slips` | slip ids (R-40) the item repairs; a repair names at least one, and the list agrees with `slips.json`'s `repair` both ways | |
-| `angle` | `balance`, `undo`, `worked`, `story`, `visual`; an R-05 retry prefers a different one | |
+| `angle` | `balance`, `undo`, `worked`, `story`, `visual`, `contrast` (a wrong solution to find the slip in); an R-05 retry takes one not tried yet | |
 | `difficulty` | `{min, max}` generator levels, 1 to 3 (R-41) | |
 | `interest_tags` | from `soccer`, `football`, `gaming`; empty means any interest, through the item's skins (R-38) | all empty |
 | `reading_level` | a school grade, whole; an estimate until measured | 6 |
