@@ -25,6 +25,8 @@ const MARKS = {
   invalid: "This line doesn't follow from the one above. Find the slip and fix it.",
   unreadable: "Platy couldn't read this one. Write it as an equation with x.",
 };
+/** On an expression to work out, a line is numbers and operations, not an equation. */
+const MARK_UNREADABLE_VALUE = "Platy couldn't read this one. Write it with numbers and signs.";
 /** While a detour waits for the tap, the line is marked but not to be fixed yet (R-01). */
 const MARK_BEFORE_DETOUR = "This line doesn't follow from the one above.";
 
@@ -57,6 +59,8 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: P
   const next = steps.lines.length + 1;
   const marked = steps.marked;
   const hint = marked?.slip ? slipHint(marked.slip) : null;
+  // An equation is solved in steps with x; an expression (no equals sign) is worked out.
+  const solving = problem.prompt.includes("=");
 
   return (
     <section
@@ -88,7 +92,7 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: P
         {/* A known slip names the mistake on its line, never the fix (R-40, R-02). */}
         {marked && !busy && (
           hint ? <p className="ladder__slip">{hint}</p>
-          : <p>{nextUp !== null && marked.result === "invalid" ? MARK_BEFORE_DETOUR : MARKS[marked.result]}</p>
+          : <p>{nextUp !== null && marked.result === "invalid" ? MARK_BEFORE_DETOUR : marked.result === "unreadable" && !solving ? MARK_UNREADABLE_VALUE : MARKS[marked.result]}</p>
         )}
       </div>
 
@@ -106,7 +110,7 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: P
           key={next}
           id="step"
           prompt={next === 1 ? "Write your first step" : "Write your next line"}
-          placeholder="One step, as an equation"
+          placeholder={solving ? "One step, as an equation" : "One step of the working"}
           button="Check this line"
           busy={busy}
           autoFocus={next > 1 || "laptop"}

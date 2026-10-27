@@ -115,7 +115,10 @@ describe("repair items", () => {
     const moves: PuzzleMove[] = (() => {
       switch (p.template) {
         case "spot_the_error":
-          return [{ check: "found_error", line: 0 }, { check: "fixed_step", text: p.n.fix }, { check: "final_answer", text: `x = ${p.n.answer}` }];
+          // A worked-out expression (the integer and order repairs) finishes on its value, not x.
+          return p.n.kind === "working"
+            ? [{ check: "found_error", line: p.n.wrong }, { check: "fixed_step", text: p.n.fix }, { check: "final_answer", text: String(p.n.answer) }]
+            : [{ check: "found_error", line: 0 }, { check: "fixed_step", text: p.n.fix }, { check: "final_answer", text: `x = ${p.n.answer}` }];
         case "missing_step":
           return [{ check: "missing_line", text: p.n.expected }];
         case "balance": {
@@ -158,10 +161,8 @@ describe("repair items", () => {
     }
   });
 
-  it("has a repair item for every inverse operations, one-step and two-step slip", () => {
-    const built = ["inverse_operations", "one_step_equations", "two_step_equations"];
-    for (const s of SLIPS.filter((x) => built.includes(x.node))) {
-      expect(itemFor(s.repair), s.id).not.toBeNull();
-    }
+  it("has a repair item for every slip on the demo path, with none left to build", () => {
+    expect(REPAIRS_TO_BUILD.size).toBe(0);
+    for (const s of SLIPS) expect(itemFor(s.repair), s.id).not.toBeNull();
   });
 });

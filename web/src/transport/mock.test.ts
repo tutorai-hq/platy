@@ -5,7 +5,12 @@ import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { answerExample } from "../mock/answers";
-import { EXPLAIN_FIRST, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD } from "../mock/script";
+import { bareNumber } from "../mock/grade";
+import {
+  confirmProblem, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD,
+  STEP_UNREADABLE_VALUE,
+} from "../mock/script";
+import { firstWrong, workOut } from "../mock/working";
 import { type MockTiming, MockTransport } from "./mock";
 
 const FAST: MockTiming = { thinkMs: 0, wordMs: 0, resetMs: 0 };
@@ -729,6 +734,108 @@ describe("MockTransport", () => {
       const h = await probed();
       for (const text of ["2x = 99", "2x = 17", "x = 13"]) await h.send({ type: "step", problem_id: "s1", line: 1, text });
       expect(h.events.at(-1)).toEqual({ type: "pause_suggested" });
+    });
+  });
+
+  // R-37: the integer and order-of-operations slips (R-40) have repairs too. Those skills are
+  // expressions worked out a line at a time, so a step problem on one routes a slip to its repair
+  // and then confirms the fix on a fresh problem to work out (R-41). The demo lesson has no such
+  // problem yet, so these run on a one-problem lesson.
+  describe("expression repairs (R-37, R-40)", () => {
+    const lessonOn = (node: "integer_arithmetic" | "order_of_operations", prompt: string, answer: number) =>
+      [confirmProblem("e1", node, prompt, answer, String(answer))];
+    // Checker syntax from the LaTeX the wire carries.
+    const fromLatex = (latex: string) =>
+      latex.replace(/\\cdot/g, "*").replace(/\\left\(/g, "(").replace(/\\right\)/g, ")").replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1)/($2)");
+    const puzzleOf = (h: ReturnType<typeof harness>) => h.events.flatMap((e) => (e.type === "puzzle" ? [e.puzzle] : []))[0];
+    const lastResult = (h: ReturnType<typeof harness>) => h.events.filter((e) => e.type === "step_result").at(-1);
+
+    it("sends a left-to-right line on an order problem to its repair, then confirms the fix on a fresh problem (R-41)", async () => {
+      const h = harness(lessonOn("order_of_operations", "20 - 3*(4 + 2)", 2));
+      await h.settle();
+      expect(h.events.find((e) => e.type === "problem")).toMatchObject({ problem_id: "e1", prompt: "20 - 3*(4 + 2)", format: "steps" });
+      await h.send({ type: "step", problem_id: "e1", line: 1, text: "20 - 3*6" });
+      expect(lastResult(h)).toMatchObject({ result: "valid" });
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "e1", line: 2, text: "17*6" });
+      expect(lastResult(h)).toMatchObject({ result: "invalid", slip: "left_to_right_ignoring_precedence" });
+      expect(h.said(mark)).toContain(STEP_REPAIR_LEAD);
+      await h.cont();
+      const puzzle = puzzleOf(h);
+      if (puzzle?.template !== "spot_the_error") throw new Error("expected the spot-the-error repair");
+      expect(puzzle).toMatchObject({ item_id: "repair-order-precedence", skill_id: "order_of_operations" });
+      // Fresh numbers: never the problem they slipped on, and never one that comes to its answer (R-02).
+      const expression = fromLatex(puzzle.equation);
+      const lines = puzzle.lines.map(fromLatex);
+      expect(expression).not.toBe("20 - 3*(4 + 2)");
+      expect(bareNumber(expression)).not.toBe(2);
+      // Solve it the way the student would: the wrong line is the first that changes the value.
+      const wrong = firstWrong(expression, lines);
+      expect(wrong).toBeGreaterThanOrEqual(0);
+      const fix = workOut(wrong === 0 ? expression : lines[wrong - 1]!, "usual")!.lines[0]!;
+      const id = puzzle.instance_id;
+      await h.send({ type: "puzzle_move", instance_id: id, move: { check: "found_error", line: wrong } });
+      await h.send({ type: "puzzle_move", instance_id: id, move: { check: "fixed_step", text: fix } });
+      await h.send({ type: "puzzle_move", instance_id: id, move: { check: "final_answer", text: String(bareNumber(expression)) } });
+      const outcomes = h.events.flatMap((e) => (e.type === "puzzle_result" ? [e.outcome] : []));
+      expect(outcomes).toEqual(["correct", "correct", "correct"]);
+      await h.send({ type: "child_message", text: "times before minus" });
+      await h.send({ type: "puzzle_next", instance_id: id });
+
+      // A fresh order problem to work out takes the place of the one they slipped on.
+      const fresh = h.events.filter((e) => e.type === "problem").at(-1);
+      if (fresh?.type !== "problem") throw new Error("expected a problem");
+      expect(fresh).toMatchObject({ problem_id: "g1", skill_id: "order_of_operations", format: "steps", instruction: "Work it out one line at a time" });
+      expect(isOneOf(fresh.prompt, ["20 - 3*(4 + 2)", expression])).toBe(false);
+      expect(bareNumber(fresh.prompt)).not.toBe(2);
+      // Worked out right, one operation per line, it's solved.
+      const working = workOut(fresh.prompt, "usual")!.lines;
+      for (const [i, text] of working.entries()) await h.send({ type: "step", problem_id: "g1", line: i + 1, text });
+      expect(lastResult(h)).toMatchObject({ result: "solved" });
+      expect(h.problems()).toEqual(["e1", "g1"]);
+    });
+
+    it("sends a lost sign on a product of two negatives to the integer-signs repair", async () => {
+      const h = harness(lessonOn("integer_arithmetic", "(-6)*(-4)", 24));
+      await h.settle();
+      await h.send({ type: "step", problem_id: "e1", line: 1, text: "-24" });
+      expect(lastResult(h)).toMatchObject({ result: "invalid", slip: "negative_times_negative_negative" });
+      await h.cont();
+      const puzzle = puzzleOf(h);
+      if (puzzle?.template !== "spot_the_error") throw new Error("expected the spot-the-error repair");
+      expect(puzzle).toMatchObject({ item_id: "repair-integer-signs", skill_id: "integer_arithmetic" });
+      const expression = fromLatex(puzzle.equation);
+      expect(expression).not.toBe("(-6)*(-4)");
+      expect(bareNumber(expression)).not.toBe(24);
+      expect(firstWrong(expression, puzzle.lines.map(fromLatex))).toBeGreaterThanOrEqual(0);
+    });
+
+    it("opens the subtraction and brackets repairs for their slips", async () => {
+      const cases = [
+        ["integer_arithmetic", "-9 + 4 - 3", -8, "-5 + 3", "subtraction_treated_as_addition", "repair-integer-subtraction", "missing_step"],
+        ["order_of_operations", "6 - 2*(5 + 4)", -12, "6 - 10 + 4", "brackets_ignored", "repair-order-brackets", "spot_the_error"],
+      ] as const;
+      for (const [node, prompt, answer, wrong, slip, item_id, template] of cases) {
+        const h = harness(lessonOn(node, prompt, answer));
+        await h.settle();
+        await h.send({ type: "step", problem_id: "e1", line: 1, text: wrong });
+        expect(lastResult(h), slip).toMatchObject({ result: "invalid", slip });
+        await h.cont();
+        const puzzle = puzzleOf(h);
+        expect(puzzle, slip).toMatchObject({ template, item_id, skill_id: node });
+        if (puzzle?.template !== "spot_the_error" && puzzle?.template !== "missing_step") throw new Error("expected a repair puzzle");
+        expect(fromLatex(puzzle.equation), slip).not.toBe(prompt);
+        expect(bareNumber(fromLatex(puzzle.equation)), slip).not.toBe(answer);
+      }
+    });
+
+    it("says to write numbers and signs when a line on a problem to work out can't be read", async () => {
+      const h = harness(lessonOn("order_of_operations", "20 - 3*(4 + 2)", 2));
+      await h.settle();
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "e1", line: 1, text: "x = 2" });
+      expect(lastResult(h)).toMatchObject({ result: "unreadable" });
+      expect(h.said(mark).join(" ")).toBe(STEP_UNREADABLE_VALUE);
     });
   });
 

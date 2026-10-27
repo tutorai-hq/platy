@@ -1,9 +1,11 @@
 import type { Pans } from "../content/types";
 import { evaluate } from "../math/evaluate";
+import { childMathToLatex } from "../math/latex";
 import { parseMathStrict } from "../math/parse";
 import { readAnswer } from "./answers";
-import { hasSolution, linearForm, near, sides } from "./grade";
+import { bareNumber, hasSolution, linearForm, near, sides } from "./grade";
 import { slipValues } from "./slips";
+import { firstWrong, numeralsIn, type Reduction, sameExpression, unbracketed, workOut } from "./working";
 
 // Mock-only problem generators for the puzzle templates. They follow each item's
 // generator rules (content/prompts/puzzle-v1.md), so every instance has whole-number answers
@@ -42,6 +44,8 @@ export interface Numbers {
 }
 
 export interface SpotInstance extends Numbers {
+  /** An equation solved in lines; "working" is an expression worked out (the integer and order repairs). */
+  kind: "equation";
   /** a*x - b = c, in checker syntax and as LaTeX. */
   equation: string;
   latex: string;
@@ -65,6 +69,7 @@ export function spotTheError(rng: Rng): SpotInstance {
     if (c <= 0 || c - b <= 0 || (2 * b) % a !== 0 || [a, b, c, c - b].includes(answer)) return null;
     const wrong = (c - b) / a;
     return {
+      kind: "equation",
       a, b, c, answer,
       equation: `${a}*x - ${b} = ${c}`,
       latex: `${a}x - ${b} = ${c}`,
@@ -85,9 +90,12 @@ export interface MissingInstance extends Numbers {
   /** The blanked line, and the line the slip of adding b would give. */
   expected: string;
   slip: string;
-  /** "last": the first step is shown and the last line is blank (a repair item's variant). */
-  blank?: "last";
-  /** A "last" blank's known wrong lines (R-40): the value each slip gives and the ask to use. */
+  /**
+   * "last": the first step is shown and the last line is blank; "working": an expression's middle
+   * line, the first two numbers worked out (repair items' variants).
+   */
+  blank?: "last" | "working";
+  /** A "last" or "working" blank's known wrong lines (R-40): the value each slip gives and the ask to use. */
   slips?: { value: number; key: string }[];
   /** Words for the item's text slots that depend on the instance, like which way to undo. */
   vars?: Record<string, string | number>;
@@ -542,6 +550,144 @@ export function oneStepLine(rng: Rng, kind: OneStepKind, level: Level, avoid: re
         };
       }
     }
+  });
+}
+
+/**
+ * True when `prompt` is one of `avoid` (the lesson's problems and lines the student has written)
+ * however it's written, or an expression with the same working or the same value as one, which
+ * would give it away (R-02).
+ */
+export function clashes(prompt: string, avoid: readonly string[]): boolean {
+  if (isOneOf(prompt, avoid)) return true;
+  const value = bareNumber(prompt);
+  if (value === null) return false;
+  return avoid.some((o) => {
+    const w = bareNumber(o);
+    return (w !== null && near(w, value)) || sameExpression(prompt, o);
+  });
+}
+
+/**
+ * Spot-the-error on an expression (the integer and order-of-operations repairs): {player}'s
+ * working, one operation per line, with one line wrong and the lines after it following from it.
+ */
+export interface WorkingSpotInstance {
+  kind: "working";
+  /** The expression in checker syntax, and as LaTeX for the player. */
+  expression: string;
+  latex: string;
+  lines: string[];
+  linesLatex: string[];
+  /** Which line is wrong, found by working the lines out, never by where the slip was planted. */
+  wrong: number;
+  /** One right next line from the line above the wrong one. */
+  fix: string;
+  answer: number;
+  /** Final answers to ask about (R-40): what the flawed lines came to, and the answer without its sign. */
+  slips: { value: number; key: string }[];
+  /** Fixes to ask about: the same slip again. */
+  fixSlips: { value: number; key: string }[];
+  vars: Record<string, string | number>;
+}
+
+/** True when a number written anywhere in `texts` is the answer, sign aside (R-02). */
+function showsAnswer(texts: readonly string[], answer: number): boolean {
+  return texts.some((t) => numeralsIn(t).some((v) => near(v, Math.abs(answer))));
+}
+
+/** A spot-the-error instance from flawed working, or null when the working doesn't make one. */
+function workingSpot(expression: string, answer: number, flawed: string[], fixKey: string, avoid: readonly string[]): WorkingSpotInstance | null {
+  const wrong = firstWrong(expression, flawed);
+  // The slip has to change something, and leave a line to finish from (never the last line).
+  if (wrong < 0 || wrong === flawed.length - 1 || clashes(expression, avoid) || showsAnswer([expression, ...flawed], answer)) return null;
+  const fix = workOut(wrong === 0 ? expression : flawed[wrong - 1]!, "usual")?.lines[0];
+  const old = bareNumber(flawed[flawed.length - 1]!);
+  const wrongValue = bareNumber(flawed[wrong]!);
+  if (fix === undefined || old === null || wrongValue === null) return null;
+  const slips = [{ value: old, key: "old_answer" }];
+  if (answer !== 0 && !near(-answer, old)) slips.push({ value: -answer, key: "sign_lost" });
+  return {
+    kind: "working",
+    expression,
+    latex: childMathToLatex(expression),
+    lines: flawed,
+    linesLatex: flawed.map(childMathToLatex),
+    wrong,
+    fix,
+    answer,
+    slips,
+    fixSlips: [{ value: wrongValue, key: fixKey }],
+    vars: {},
+  };
+}
+
+/**
+ * Integer signs (R-37): a level 3 integer problem, products of signed numbers with more to do
+ * after them, worked out with one product's or quotient's sign wrong. Only that level has a line
+ * to finish from after the slip, so every level gets its numbers.
+ */
+export function signChain(rng: Rng, avoid: readonly string[] = []): WorkingSpotInstance {
+  const signed = (r: Reduction) => (r.op === "*" || r.op === "/") && (r.left < 0 || r.right < 0);
+  return draw(rng, (r) => {
+    const p = makeProblem("integer_arithmetic", 3, r);
+    const right = workOut(p.prompt, "usual");
+    const spots = right?.reductions.filter(signed).length ?? 0;
+    if (spots === 0) return null;
+    // The slip lands on one of the signed products or quotients: that result gets the wrong sign.
+    let k = int(r, 0, spots - 1);
+    const flawed = workOut(p.prompt, "usual", (red) => (signed(red) && k-- === 0 ? -red.value : null));
+    return flawed && workingSpot(p.prompt, p.answer, flawed.lines, "sign", avoid);
+  });
+}
+
+export type OrderSlip = "precedence" | "brackets";
+
+/**
+ * Order of operations (R-37): a problem at the student's level worked out the slipped way, left
+ * to right (brackets still first) or with the brackets skipped. Level 1 has no brackets, so the
+ * brackets item starts at 2.
+ */
+export function orderChain(rng: Rng, kind: OrderSlip, level: Level, avoid: readonly string[] = []): WorkingSpotInstance {
+  const at: Level = kind === "brackets" && level === 1 ? 2 : level;
+  return draw(rng, (r) => {
+    const p = makeProblem("order_of_operations", at, r);
+    const flawed = kind === "precedence" ? workOut(p.prompt, "left_to_right") : workOut(unbracketed(p.prompt), "usual");
+    return flawed && workingSpot(p.prompt, p.answer, flawed.lines, kind === "precedence" ? "left_first" : "bracket", avoid);
+  });
+}
+
+/**
+ * Integer subtraction (R-37): "n1 ± n2 - n3" from the integer generator at the student's level
+ * (capped at 2, since level 3 is products), with the middle line left for the student: the first
+ * two numbers worked out, the last one still taken away.
+ */
+export function sumLine(rng: Rng, level: Level, avoid: readonly string[] = []): MissingInstance {
+  const at: Level = level === 3 ? 2 : level;
+  return draw(rng, (r) => {
+    const p = makeProblem("integer_arithmetic", at, r);
+    const m = /^(-?\d+) ([+-]) (\d+) - (\d+)$/.exec(p.prompt);
+    if (!m || clashes(p.prompt, avoid)) return null;
+    const [n1, n2, n3] = [Number(m[1]), Number(m[3]), Number(m[4])];
+    const minusFirst = m[2] === "-";
+    const mid = minusFirst ? n1 - n2 : n1 + n2;
+    const { answer } = p;
+    // No number on screen is the answer, and the middle value isn't 0 or the answer either.
+    if (mid === 0 || [n1, n2, n3, mid].some((v) => Math.abs(v) === Math.abs(answer))) return null;
+    // The last minus read as a plus, or, with two minuses, the first one.
+    const slips = [{ value: mid + n3, key: "plus_for_minus" }];
+    if (minusFirst) slips.push({ value: n1 + n2 - n3, key: "first_plus" }, { value: n1 + n2 + n3, key: "first_plus" });
+    return {
+      a: n1, b: n2, c: n3, answer,
+      equation: p.prompt,
+      latex: childMathToLatex(p.prompt),
+      linesLatex: [null, childMathToLatex(String(answer))],
+      expected: `${mid} - ${n3}`,
+      slip: `${mid} + ${n3}`,
+      blank: "working",
+      slips: slips.filter((s) => !near(s.value, answer)),
+      vars: { first: `${m[1]} ${m[2]} ${n2}`, mid, c_abs: n3 },
+    };
   });
 }
 

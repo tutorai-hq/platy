@@ -181,14 +181,22 @@ session's memory only: they're dropped at the problem's end and on any reset, an
 put in error text (P-1, P-10, A-4). It checks each new line against the last with
 `platy.mathcheck`. On a
 `steps` problem the server ignores a bare `answer`, so the final answer alone never counts. The
-motion is drawn in the browser from the two lines (`src/math/terms.ts`) and never grades.
+motion is drawn in the browser from the two lines (`src/math/terms.ts`) and never grades. On an
+expression skill (integer arithmetic, order of operations) the lines are the working, not steps in
+x: a line is `valid` when it comes to the same value as the one above and `solved` when it is one
+number (`src/mock/steps.ts`), and a slip on one opens its repair and then a fresh problem to work
+out, the same way as on an equation.
 
 Generated problems (R-41): `src/mock/generate.ts` makes problems for the five demo skills at three
 levels (1 small positive whole numbers, 2 negatives or bigger numbers, 3 a fraction or decimal
 answer or an extra step). They're seeded, never repeat within a session, are checked before
 they're returned, and carry the wrong answers their slips lead to. The scripted lesson doesn't
 use them only for repair puzzles and the fresh problem after one. The real generators belong on the
-server (`docs/proposals/generators-python.md`).
+server (`docs/proposals/generators-python.md`). Every slip on the demo path has a repair item
+(`REPAIRS` in `src/mock/puzzles.ts`, R-37). The integer and order-of-operations repairs show a
+generated problem worked out a line at a time with one line wrong: `src/mock/working.ts` writes
+the lines the way a student would and finds the wrong one by what the lines come to, never by
+where the slip was planted. Subtraction read as addition gets a sum with its middle line missing.
 
 The primer view (R-42, proposed for Connor to accept) adds `primer_state {mastery, hypothesis,
 move}` from the server, sent after each of the primer's moves to a demo session only. It carries

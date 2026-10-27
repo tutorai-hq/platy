@@ -75,3 +75,28 @@ describe("checkStep (R-48)", () => {
     expect(checkStep("2x = 12", "x = 6 = 6")).toBe("unreadable");
   });
 });
+
+// R-37: the integer and order-of-operations skills are expressions worked out, not equations in x.
+describe("checkStep on an expression to work out", () => {
+  it("accepts a line that comes to the same value, and calls one number solved", () => {
+    expect(checkStep("20 - 3*(4 + 2)", "20 - 3*6")).toBe("valid");
+    expect(checkStep("20 - 3*6", "20 - 18")).toBe("valid");
+    expect(checkStep("20 - 18", "2")).toBe("solved");
+    expect(checkStep("(-6)*(-4)", "24")).toBe("solved");
+    expect(checkStep("24/(2 + 6) + 5", "24/8 + 5")).toBe("valid");
+    expect(checkStep("-9 + 4 - 3", "-5 - 3")).toBe("valid");
+  });
+
+  it("marks a line that changes the value", () => {
+    expect(checkStep("20 - 3*6", "17*6")).toBe("invalid");
+    expect(checkStep("(-6)*(-4)", "-24")).toBe("invalid");
+    expect(checkStep("6 - 2*(5 + 4)", "6 - 10 + 4")).toBe("invalid");
+    expect(checkStep("-9 + 4 - 3", "-5 + 3")).toBe("invalid");
+  });
+
+  it("can't read a line with x in it, or with no math", () => {
+    expect(checkStep("-9 + 4 - 3", "x = -8")).toBe("unreadable");
+    expect(checkStep("-9 + 4 - 3", "hello")).toBe("unreadable");
+    expect(checkStep("-9 + 4 - 3", "-5 -")).toBe("unreadable");
+  });
+});

@@ -1,12 +1,7 @@
 {
   "schema_version": 1,
   "about": "Slip map (R-40). Common wrong steps for each skill-map node, keyed by node id. 'rule' says in words what the detector looks for; the mock detector is web/src/mock/slips.ts and the real one runs on sympy in platy.mathcheck. 'prev' is the line above (or the problem), 'next' is what the student wrote, 'answer' is the correct value where the problem has one. Hints name the move and never give a number or the next line (R-02).",
-  "repairs_to_build": [
-    "repair-integer-signs",
-    "repair-integer-subtraction",
-    "repair-order-precedence",
-    "repair-order-brackets"
-  ],
+  "repairs_to_build": [],
   "slips": [
     {
       "id": "negative_times_negative_negative",

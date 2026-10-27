@@ -1,19 +1,19 @@
 import type { PaletteId, PuzzleMove, PuzzleTemplate } from "../content/types";
 import { answerExample, checkAnswer, matchesValue, readAnswer } from "../mock/answers";
 import { SLIPS, slipRepair } from "../content/slips";
-import { DEMO_NODES, type DemoNode, isOneOf, type Level, problemSession, seeded } from "../mock/generate";
+import { clashes, DEMO_NODES, type DemoNode, type Level, problemSession, seeded } from "../mock/generate";
 import { MockPrimer, PROBE_BELOW } from "../mock/primer";
 import { detectSlip } from "../mock/slips";
 import { checkStep } from "../mock/steps";
 import {
-  type Fade, gradeMove, INTERESTS, type Interest, itemFor, type LivePuzzle, line, newItemPuzzle, newPuzzle, nextHint, skinFor,
-  toWire,
+  type Fade, gradeMove, INTERESTS, type Interest, itemFor, type LivePuzzle, line, newItemPuzzle, newPuzzle, nextHint, problemOf,
+  skinFor, toWire, worksOut,
 } from "../mock/puzzles";
 import {
   BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OFF_TOPIC, OPENING,
   OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
-  PUZZLE_UNREADABLE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SEE_MAP, SHOW_ONE, STEP_IN_LINES,
-  STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
+  PUZZLE_UNREADABLE, PUZZLE_UNREADABLE_VALUE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SEE_MAP, SHOW_ONE, STEP_IN_LINES,
+  STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, STEP_UNREADABLE_VALUE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
 } from "../mock/script";
 import type { ClientEvent, ServerEvent, SessionMode } from "../protocol";
 import type { DemoTrigger, TutorTransport } from "./types";
@@ -326,7 +326,8 @@ export class MockTransport implements TutorTransport {
         await this.finishProblem();
         return;
       case "unreadable":
-        await this.say(STEP_UNREADABLE);
+        // On an expression to work out (no x), the line is numbers and operations.
+        await this.say(p.variable === null ? STEP_UNREADABLE_VALUE : STEP_UNREADABLE);
         return;
       case "invalid": {
         this.misses++;
@@ -511,7 +512,7 @@ export class MockTransport implements TutorTransport {
     }
     this.puzzleNudge = null;
     if (v.outcome === "unreadable") {
-      await this.say(PUZZLE_UNREADABLE);
+      await this.say(worksOut(live) ? PUZZLE_UNREADABLE_VALUE : PUZZLE_UNREADABLE);
     } else if (v.ask && live.misses >= 3 && !this.pivoted) {
       // Third miss on one puzzle: the same first rung as on a problem (R-21).
       await this.suggestPause();
@@ -749,9 +750,9 @@ export class MockTransport implements TutorTransport {
    */
   private freshProblem(p: ScriptedProblem, repair: LivePuzzle | null): ScriptedProblem {
     const node: DemoNode = DEMO_NODES.find((n) => n === p.skill_id) ?? "two_step_equations";
-    const avoid = [...this.lessonPrompts(), ...(repair ? [repair.n.latex] : [])];
+    const avoid = [...this.lessonPrompts(), ...(repair ? [problemOf(repair)] : [])];
     let g = this.problems.next(node, this.level);
-    while (isOneOf(g.prompt, avoid)) g = this.problems.next(node, this.level);
+    while (clashes(g.prompt, avoid)) g = this.problems.next(node, this.level);
     return confirmProblem(`g${++this.generated}`, node, g.prompt, g.answer, g.answerText);
   }
 

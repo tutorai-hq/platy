@@ -1,21 +1,32 @@
 import { type Node, parseMathStrict, unwrap } from "../math/parse";
 import type { StepResult } from "../protocol";
-import { linearForm } from "./grade";
+import { bareNumber, linearForm } from "./grade";
 
 // Mock-only step checking for step-by-step solving (R-48). In the real app the server checks
 // every line with platy.mathcheck; this stands in for it so the demo runs with no backend.
-// A line is a valid step when it is an equation with the same solution as the line above.
+// A line is a valid step when it is an equation with the same solution as the line above, or,
+// on an expression to work out, when it comes to the same value as the line above.
 
 const EPS = 1e-9;
 
 export function checkStep(prev: string, next: string): StepResult {
   const n = linearForm(next);
   const p = linearForm(prev);
-  if (!n || !p) return "unreadable";
+  if (!n || !p) return checkWorking(prev, next);
   // "5 = 17" has no x left in it; with one solution above, it can't be equivalent.
   if (Math.abs(n.a) < EPS || Math.abs(p.a) < EPS) return "invalid";
   if (Math.abs(-n.b / n.a - -p.b / p.a) > EPS) return "invalid";
   return isFinished(next) ? "solved" : "valid";
+}
+
+/** Working an expression out: the line comes to the same value, and is solved once it's one number. */
+function checkWorking(prev: string, next: string): StepResult {
+  const p = bareNumber(prev);
+  const n = bareNumber(next);
+  if (p === null || n === null) return "unreadable";
+  if (Math.abs(p - n) > EPS) return "invalid";
+  const node = parseMathStrict(next);
+  return node && isPlainNumber(unwrap(node)) ? "solved" : "valid";
 }
 
 /** "x = 6", "6 = x", "x = -2/3": x alone on one side, a finished number on the other. */

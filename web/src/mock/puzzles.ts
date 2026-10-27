@@ -5,9 +5,10 @@ import type {
 } from "../content/types";
 import {
   balance, type BalanceInstance, isOneOf, lastStep, type Level, type MissingInstance, missingStep, oneStepBalance, oneStepLine,
-  type Rng, type SpotInstance, spotTheError, type WorkedInstance, workedExample,
+  orderChain, type Rng, signChain, type SpotInstance, spotTheError, sumLine, type WorkedInstance, workedExample, type WorkingSpotInstance,
 } from "./generate";
-import { bareNumber, hasSolution, readable, sameLine } from "./grade";
+import { bareNumber, hasSolution, near, readable, sameLine } from "./grade";
+import { isNumeralText, sameExpression, sameSum } from "./working";
 
 // Mock-only puzzle items, interest skins and grading. They stand in for the server (R-37,
 // R-38): pick an item, generate an instance, resolve the skin, grade each move, and pick the
@@ -250,6 +251,43 @@ export const ITEMS: Record<PuzzleTemplate, Item> = {
   worked_example: watch,
 };
 
+// The asks shared by the items that spot an error in a worked-out expression (the integer and
+// order repairs), where the puzzle finishes on the value, not on x.
+const WORKING_ASKS: Record<string, Ask> = {
+  wrong_line: {
+    ask: "What does that line do to the one above it, and does it still come to the same thing?",
+    nudge: "Check each line against the one above, starting from the problem. Where does the value change?",
+  },
+  skipped: {
+    ask: "That's where it ends up. What does this line look like with just one more step done?",
+    nudge: "Do one operation from the line above, and leave the rest as it is.",
+  },
+  copied: {
+    ask: "That's the line above again. What's the next step from it?",
+    nudge: "Work out one operation from the line above, and write what's left.",
+  },
+  fix_other: {
+    ask: "How did you get that from the line above?",
+    nudge: "Only one step was wrong in that line. What should it have come to?",
+  },
+  old_answer: {
+    ask: "That's what the old lines gave. Does it still follow from your fixed line?",
+    nudge: "Start from your fixed line and work down again, one operation at a time.",
+  },
+  sign_lost: {
+    ask: "Is the result above zero or below it? Go through the signs once more.",
+    nudge: "Keep the sign with each number as you go. What's the sign of the last step?",
+  },
+  not_done: {
+    ask: "That's true. What does it come to?",
+    nudge: "Work out what's left in that line, and write the one number.",
+  },
+  final_other: {
+    ask: "How did you get that from your fixed line?",
+    nudge: "Work down from your fixed line, one operation at a time.",
+  },
+};
+
 // Repair items (R-37) for slips that had none (R-40), on the existing players. Each works on one
 // move: the slip's own, on fresh numbers.
 export const REPAIRS: Record<string, Item> = {
@@ -326,7 +364,7 @@ export const REPAIRS: Record<string, Item> = {
     item_id: "repair-inverse-divide",
     template: "balance",
     skill_id: "inverse_operations",
-    intro: "A balance scale: {containers} on one side, loose {units} on the other. Every {container} holds the same. How many {units} in each?",
+    intro: "A balance scale with {containers} on one side and loose {units} on the other, every {container} holding the same. How many {units} in each?",
     instructions: "Get one {container} alone without tipping the scale.",
     hints: [
       "How many {containers} are there? That's the number x is multiplied by.",
@@ -492,6 +530,130 @@ export const REPAIRS: Record<string, Item> = {
     reflection: "How did you decide whether to add or take away? Would the other way have worked?",
     thanks: "Thanks. Undo means do the opposite: take away what was added, or add back what was taken away.",
   },
+  // negative_times_negative_negative, integer_sign_dropped and order_sign_dropped: products of
+  // signed numbers worked out, one with its sign wrong, and the lines after it following from it.
+  "repair-integer-signs": {
+    item_id: "repair-integer-signs",
+    template: "spot_the_error",
+    skill_id: "integer_arithmetic",
+    intro: "{player} from the {team} worked this out, but a sign went wrong somewhere. Let's find it.",
+    instructions: "One line of this working is wrong. Tap it, then write what it should say.",
+    hints: [
+      "Check each line against the one above it. Does it still come to the same thing?",
+      "Look at the lines where two numbers are multiplied or divided. What sign should each result have?",
+      "Two negatives multiplied or divided make a positive, and one negative makes a negative. Which line breaks that?",
+    ],
+    replies: {
+      found_error: "Yes, that's the one. What should it say?",
+      fixed_step: "Right. Now finish it from your line.",
+      final_answer: "That's it, ${answer}$. The sign came along the whole way.",
+    },
+    asks: {
+      ...WORKING_ASKS,
+      sign: {
+        ask: "Look at the two numbers that were multiplied or divided there, signs and all. What sign should the result have?",
+        nudge: "Two negatives make a positive, and one negative makes a negative. Which is it here?",
+      },
+    },
+    reflection: "Where did the sign go wrong, and how could you catch that next time?",
+    thanks: "Thanks. Checking the sign of each product or quotient as you go catches this one.",
+  },
+  // subtraction_treated_as_addition: "n1 ± n2 - n3" with its middle line missing, so the last
+  // number has to be taken away, not added on.
+  "repair-integer-subtraction": {
+    item_id: "repair-integer-subtraction",
+    template: "missing_step",
+    skill_id: "integer_arithmetic",
+    intro: "{player} from the {team} worked this out, but the middle line went missing.",
+    instructions: "Write line 1: what ${first}$ makes, with the last number still to take away.",
+    hints: [
+      "Start with the first two numbers. What does ${first}$ make?",
+      "Now look at the sign in front of the ${c_abs}$. Is it added on, or taken away?",
+      "Write what ${first}$ makes, then keep the minus and the ${c_abs}$ after it.",
+    ],
+    replies: {
+      missing_line: "Yes. ${first}$ makes ${mid}$, and taking away ${c_abs}$ leaves ${answer}$.",
+    },
+    asks: {
+      plus_for_minus: {
+        ask: "Look at the sign in front of the ${c_abs}$. Does it add it on, or take it away?",
+        nudge: "A minus between two numbers takes the second one away, even when the first is negative.",
+      },
+      first_plus: {
+        ask: "What does ${first}$ make? Look at the sign between those two numbers.",
+        nudge: "The first minus takes the second number away. What's left before the last number?",
+      },
+      skipped: {
+        ask: "That's where it ends up. What does the line look like with just the first two numbers worked out?",
+        nudge: "Work out ${first}$, and leave the last number as it is.",
+      },
+      copied: {
+        ask: "That's the problem again. What do the first two numbers make?",
+        nudge: "Work out ${first}$, then write the last number after it.",
+      },
+      other: {
+        ask: "How did you get that from the problem?",
+        nudge: "Work out ${first}$ first, and keep what comes after it.",
+      },
+    },
+    reflection: "How did you keep track of the minus signs in this one?",
+    thanks: "Thanks. A minus between numbers takes the next number away, whatever the running total is.",
+  },
+  // left_to_right_ignoring_precedence: the problem worked strictly left to right, wrong from the
+  // line where that first changes the value.
+  "repair-order-precedence": {
+    item_id: "repair-order-precedence",
+    template: "spot_the_error",
+    skill_id: "order_of_operations",
+    intro: "{player} from the {team} worked this out, but one line went wrong. Let's find it.",
+    instructions: "One line of this working is wrong. Tap it, then write what it should say.",
+    hints: [
+      "Check each line against the one above it. Does it still come to the same thing?",
+      "Which operations come first: multiplying and dividing, or adding and taking away?",
+      "Multiplying and dividing come before adding and taking away, even when they come later in the line. Which line broke that?",
+    ],
+    replies: {
+      found_error: "Yes, that's the one. What should it say?",
+      fixed_step: "Right. Now finish it from your line.",
+      final_answer: "That's it, ${answer}$. Multiplying and dividing first, then adding and taking away.",
+    },
+    asks: {
+      ...WORKING_ASKS,
+      left_first: {
+        ask: "Which operation did you do first in that line, and why that one?",
+        nudge: "Being on the left doesn't make an operation first. Which kind of operation comes first?",
+      },
+    },
+    reflection: "Which operation did you do first, and how did you decide?",
+    thanks: "Thanks. Deciding what comes first before you start is the whole skill here.",
+  },
+  // brackets_ignored: the problem worked with its brackets skipped, wrong from the first line.
+  "repair-order-brackets": {
+    item_id: "repair-order-brackets",
+    template: "spot_the_error",
+    skill_id: "order_of_operations",
+    intro: "{player} from the {team} worked this out, but one line went wrong. Let's find it.",
+    instructions: "One line of this working is wrong. Tap it, then write what it should say.",
+    hints: [
+      "Check each line against the one above it. Does it still come to the same thing?",
+      "Look at the brackets in the problem. What's inside them, and when does that get worked out?",
+      "Brackets come first: work out what's inside them before anything else. Which line skipped that?",
+    ],
+    replies: {
+      found_error: "Yes, that's the one. What should it say?",
+      fixed_step: "Right. Now finish it from your line.",
+      final_answer: "That's it, ${answer}$. Brackets first, then the rest in the usual order.",
+    },
+    asks: {
+      ...WORKING_ASKS,
+      bracket: {
+        ask: "Which part did you work out first there, and why that one?",
+        nudge: "Brackets are there to say what comes first. What's inside them?",
+      },
+    },
+    reflection: "What did the brackets change about the order? How do you spot them when you're going fast?",
+    thanks: "Thanks. Brackets first, every time, then the usual order.",
+  },
 };
 
 /** Any item a slip can point at, by id. */
@@ -556,6 +718,7 @@ interface LiveBase {
 /** A puzzle the mock server is running: its numbers stay put when the skin changes. */
 export type LivePuzzle =
   | (LiveBase & { template: "spot_the_error"; n: SpotInstance })
+  | (LiveBase & { template: "spot_the_error"; n: WorkingSpotInstance })
   | (LiveBase & { template: "missing_step"; n: MissingInstance })
   | (LiveBase & { template: "balance"; n: BalanceInstance; pans: Pans })
   | (LiveBase & { template: "worked_example"; n: WorkedInstance; fade: Fade });
@@ -606,6 +769,14 @@ export function newItemPuzzle(
       return { ...base, item: item!, template: "missing_step", n: oneStepLine(rng, "sign", level, avoid) };
     case "repair-one-step-direction":
       return { ...base, item: item!, template: "missing_step", n: oneStepLine(rng, "direction", level, avoid) };
+    case "repair-integer-signs":
+      return { ...base, item: item!, template: "spot_the_error", n: signChain(rng, avoid) };
+    case "repair-integer-subtraction":
+      return { ...base, item: item!, template: "missing_step", n: sumLine(rng, level, avoid) };
+    case "repair-order-precedence":
+      return { ...base, item: item!, template: "spot_the_error", n: orderChain(rng, "precedence", level, avoid) };
+    case "repair-order-brackets":
+      return { ...base, item: item!, template: "spot_the_error", n: orderChain(rng, "brackets", level, avoid) };
   }
   const template = (Object.keys(ITEMS) as PuzzleTemplate[]).find((t) => ITEMS[t].item_id === item_id);
   if (!template) throw new Error(`no item ${item_id}`);
@@ -618,13 +789,17 @@ export function newItemPuzzle(
 type Vars = Record<string, string | number>;
 
 function vars(live: LivePuzzle, skin: Skin): Vars {
-  const { a, b, c, answer } = live.n;
+  const { answer } = live.n;
   const w = skin.words;
-  const v: Vars = { ...w, team: skin.team_name, player: skin.player_names[0] ?? "", a, b, c, answer };
+  const v: Vars = { ...w, team: skin.team_name, player: skin.player_names[0] ?? "", answer };
   v.answer_units = `${answer} ${answer === 1 ? w.unit : w.units}`;
-  v.b_units = `${b} ${b === 1 ? w.unit : w.units}`;
-  // An instance's own words, like which way to undo (the one-step repairs).
-  return live.template === "missing_step" ? { ...v, ...live.n.vars } : v;
+  // A worked-out expression has no a, b and c.
+  if ("a" in live.n) {
+    const { a, b, c } = live.n;
+    Object.assign(v, { a, b, c, b_units: `${b} ${b === 1 ? w.unit : w.units}` });
+  }
+  // An instance's own words, like which way to undo (the one-step repairs) or what to work out first.
+  return "vars" in live.n ? { ...v, ...live.n.vars } : v;
 }
 
 export function fill(text: string, v: Vars): string {
@@ -697,13 +872,28 @@ export function gradeMove(live: LivePuzzle, move: PuzzleMove, skin: Skin): Verdi
     check, outcome: "correct", reply: say((i) => i.replies[check]), solved,
   });
   const unreadable = (check: CheckId): Verdict => ({ check, outcome: "unreadable", solved: false });
+  /** A graded line: "correct", "unreadable" or the key of the ask to use. */
+  const verdict = (check: CheckId, key: string, solves: boolean): Verdict =>
+    key === "correct" ? pass(check, solves) : key === "unreadable" ? unreadable(check) : miss(check, key);
 
   switch (live.template) {
     case "spot_the_error": {
       const n = live.n;
       const stage = spotStage(live.outcomes);
+      if (n.kind === "working") {
+        // The wrong line was found by working the lines out, never by where the slip was planted;
+        // the fix is any right next line; the finish is the value itself.
+        if (move.check === "found_error" && stage === "find") {
+          return move.line === n.wrong ? pass("found_error") : miss("found_error", "wrong_line");
+        }
+        if (move.check === "fixed_step" && stage === "fix") return verdict("fixed_step", workingFix(move.text, n), false);
+        if (move.check === "final_answer" && stage === "finish") return verdict("final_answer", workingFinal(move.text, n.answer, n.slips), true);
+        return null;
+      }
       if (move.check === "found_error" && stage === "find") {
-        return move.line === 0 ? pass("found_error") : miss("found_error", "wrong_line");
+        // The wrong line, the way the server would find it: the first that no longer has the solution.
+        const wrong = n.lines.findIndex((l) => !hasSolution(l, n.answer));
+        return move.line === wrong ? pass("found_error") : miss("found_error", "wrong_line");
       }
       if (move.check === "fixed_step" && stage === "fix") {
         const t = move.text;
@@ -728,7 +918,7 @@ export function gradeMove(live: LivePuzzle, move: PuzzleMove, skin: Skin): Verdi
       // default, taking the a away instead of dividing by it).
       const key = n.blank === "last"
         ? finalAnswer(move.text, n.answer, n.slips ?? [{ value: n.c - n.b - n.a, key: "subtracted_a" }])
-        : firstMove(move.text, n);
+        : n.blank === "working" ? workingLine(move.text, n) : firstMove(move.text, n);
       if (key === "correct") return pass("missing_line", true);
       return key === "unreadable" ? unreadable("missing_line") : miss("missing_line", key);
     }
@@ -799,8 +989,77 @@ function finalAnswer(text: string, answer: number, slips: { value: number; key: 
   return slipKey(is);
 }
 
+/** The ask for a known wrong value, or null. */
+function keyOf(value: number, slips: readonly { value: number; key: string }[]): string | null {
+  return slips.find((s) => near(s.value, value))?.key ?? null;
+}
+
+/** A line written with its value, "20 - 18 = 2": the line, when the value is right for it. */
+function lineOf(text: string): string {
+  const parts = text.split("=");
+  if (parts.length !== 2) return text;
+  const [p, q] = parts as [string, string];
+  const [line, value] = isNumeralText(q) ? [p, q] : isNumeralText(p) ? [q, p] : [null, null];
+  if (line === null || value === null) return text;
+  const v = bareNumber(line);
+  const w = bareNumber(value);
+  return v !== null && w !== null && near(v, w) ? line.trim() : text;
+}
+
+/**
+ * The fix for a wrong line of working: any right next line from the line above it. The value by
+ * itself skips the step, the line above copied isn't a step, and the same slip again gets its ask.
+ */
+function workingFix(text: string, n: WorkingSpotInstance): string {
+  const line = lineOf(text);
+  const value = bareNumber(line);
+  if (value === null) return "unreadable";
+  if (isNumeralText(line)) return near(value, n.answer) ? "skipped" : keyOf(value, n.fixSlips) ?? "fix_other";
+  if (sameExpression(line, n.wrong === 0 ? n.expression : n.lines[n.wrong - 1]!)) return "copied";
+  if (near(value, n.answer)) return "correct";
+  return keyOf(value, n.fixSlips) ?? "fix_other";
+}
+
+/** A worked-out expression's answer: the one number, not a line that still comes to it. */
+function workingFinal(text: string, answer: number, slips: readonly { value: number; key: string }[]): string {
+  const value = bareNumber(text);
+  if (value === null) return "unreadable";
+  if (!isNumeralText(text)) return near(value, answer) ? "not_done" : keyOf(value, slips) ?? "final_other";
+  return near(value, answer) ? "correct" : keyOf(value, slips) ?? "final_other";
+}
+
+/** The middle line of a sum: the first two numbers made one, the last one still taken away. */
+function workingLine(text: string, n: MissingInstance): string {
+  const line = lineOf(text);
+  const value = bareNumber(line);
+  if (value === null) return "unreadable";
+  const slips = n.slips ?? [];
+  if (isNumeralText(line)) return near(value, n.answer) ? "skipped" : keyOf(value, slips) ?? "other";
+  if (sameExpression(line, n.equation)) return "copied";
+  if (sameSum(line, n.expected)) return "correct";
+  return keyOf(value, slips) ?? "other";
+}
+
 /** The next hint, or null when they're used up. */
 export function nextHint(live: LivePuzzle, skin: Skin): string | null {
   const hint = live.item.hints[live.hints];
   return hint === undefined ? null : line(live, skin, () => hint);
+}
+
+/** The puzzle works an expression out (the integer and order repairs): its lines are numbers, not x. */
+export function worksOut(live: LivePuzzle): boolean {
+  return (live.template === "spot_the_error" && live.n.kind === "working") || (live.template === "missing_step" && live.n.blank === "working");
+}
+
+/** The puzzle's problem in checker syntax, so a fresh problem can stay away from it (R-41). */
+export function problemOf(live: LivePuzzle): string {
+  switch (live.template) {
+    case "spot_the_error":
+      return live.n.kind === "working" ? live.n.expression : live.n.equation;
+    case "missing_step":
+    case "worked_example":
+      return live.n.equation;
+    case "balance":
+      return live.n.latex;
+  }
 }

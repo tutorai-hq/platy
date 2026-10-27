@@ -4,6 +4,7 @@ import { evaluate } from "../math/evaluate";
 import { type Node, parseMathStrict } from "../math/parse";
 import { readAnswer } from "./answers";
 import { linearForm, near, sides } from "./grade";
+import { unbracketed } from "./working";
 
 // Mock-only slip detection (R-40). In the real app the server matches a wrong step against
 // the slip map with sympy (platy.mathcheck); this stands in for it so the demo runs with no
@@ -179,15 +180,6 @@ function factors(node: Node): [number, number] | null {
   const r = pair && valueOf(pair[1]!);
   if (l === null || r === null) return null;
   return [outer === node ? l : -l, r];
-}
-
-/** The expression with its brackets taken away, a bracket that multiplied now a "*". */
-function unbracketed(prev: string): string {
-  return prev
-    .replace(/\)\s*\(/g, "*")
-    .replace(/([0-9.a-z])\s*\(/gi, "$1*")
-    .replace(/\)\s*([0-9.a-z])/gi, "*$1")
-    .replace(/[()]/g, "");
 }
 
 /** A negative answer given without its minus sign. */

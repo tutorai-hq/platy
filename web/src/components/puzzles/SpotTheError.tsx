@@ -20,6 +20,8 @@ export function SpotTheError({ state, onMove, actions }: Props) {
   const busy = state.pending !== null;
   const [tapped, setTapped] = useState<number | null>(null);
   const [fixed, setFixed] = useState("");
+  // An equation is finished with x; worked-out expression (the integer and order repairs) with its value.
+  const solving = puzzle.equation.includes("=");
 
   return (
     <>
@@ -86,8 +88,8 @@ export function SpotTheError({ state, onMove, actions }: Props) {
       {stage === "finish" && (
         <LineEntry
           id="final"
-          prompt="Now finish it from your line. What's x?"
-          placeholder="Your answer, like x = 4"
+          prompt={solving ? "Now finish it from your line. What's x?" : "Now finish it from your line. What does it come to?"}
+          placeholder={solving ? "Your answer, like x = 4" : "Your answer"}
           button="Check my answer"
           busy={busy}
           autoFocus

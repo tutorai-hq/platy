@@ -1,19 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { PALETTE } from "../content/palette";
 import type { PuzzleMove, PuzzleTemplate, Skin } from "../content/types";
-import { isOneOf, type Level, LEVELS, seeded } from "./generate";
-import { hasSolution } from "./grade";
+import { isOneOf, type Level, LEVELS, seeded, type WorkingSpotInstance } from "./generate";
+import { bareNumber, hasSolution, near } from "./grade";
 import {
   type Fade, gradeMove, INTERESTS, ITEMS, line, type LivePuzzle, newItemPuzzle, newPuzzle, nextHint, REPAIRS, SKINS, skinFor,
   toWire, WALKTHROUGH, WORKED_FADES,
 } from "./puzzles";
+import { checkStep } from "./steps";
+import { firstWrong, isNumeralText, numeralsIn, sameExpression, unbracketed, workOut } from "./working";
 
 const TEMPLATES: PuzzleTemplate[] = ["spot_the_error", "missing_step", "balance", "worked_example"];
 const FADES: Fade[] = [0, 1, 2];
 const skin = SKINS.soccer;
 
+/** A lesson puzzle of a template: the spot-the-error one is on an equation, never a worked-out expression. */
+type Lesson<T extends PuzzleTemplate> = Exclude<Extract<LivePuzzle, { template: T }>, { n: WorkingSpotInstance }>;
+
 function live<T extends PuzzleTemplate>(template: T, seed = 1, fade: Fade = 0) {
-  return newPuzzle(template, seeded(seed), `${template}-1`, fade) as Extract<LivePuzzle, { template: T }>;
+  return newPuzzle(template, seeded(seed), `${template}-1`, fade) as Lesson<T>;
 }
 
 /** Grades a move and records its outcome, the way the mock server does. */
@@ -554,6 +559,205 @@ describe("repair items", () => {
       for (let seed = 1; seed <= 100; seed++) {
         const { c, answer } = repair<"missing_step">("repair-one-step-direction", seed, 1).n;
         expect(c > 0 && answer > 0).toBe(true);
+      }
+    });
+  });
+
+  // The integer and order slips (R-40): worked-out expressions, not equations. The wrong line is
+  // the first that no longer comes to the problem's value (working.ts), never a planted index.
+  const working = (id: string, seed = 1, level: Level = 1, avoid?: readonly string[]) => {
+    const p = repair<"spot_the_error">(id, seed, level, avoid);
+    if (p.n.kind !== "working") throw new Error(`${id}: expected a worked-out expression`);
+    return p as Extract<LivePuzzle, { n: WorkingSpotInstance }>;
+  };
+  const seedWhere = (id: string, ok: (n: WorkingSpotInstance) => boolean) => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const p = working(id, seed);
+      if (ok(p.n)) return p;
+    }
+    throw new Error(`${id}: no seed fits`);
+  };
+  const aboveOf = (n: WorkingSpotInstance) => (n.wrong === 0 ? n.expression : n.lines[n.wrong - 1]!);
+  const WORKED = ["repair-integer-signs", "repair-order-precedence", "repair-order-brackets"];
+
+  describe("worked-out expressions (spot the error on a value)", () => {
+    it("shows lines that follow from the wrong one, never the last line wrong, and never the answer (R-02)", () => {
+      for (const id of WORKED) {
+        for (const level of LEVELS) {
+          for (let seed = 1; seed <= 50; seed++) {
+            const p = working(id, seed, level);
+            const { expression, lines, wrong, fix, answer } = p.n;
+            const at = `${id} L${level} seed ${seed}: ${expression}`;
+            expect(bareNumber(expression), at).toBeCloseTo(answer, 9);
+            expect(firstWrong(expression, lines), at).toBe(wrong);
+            expect(wrong, at).toBeLessThan(lines.length - 1);
+            expect(isNumeralText(lines.at(-1)!), at).toBe(true);
+            expect(p.n.linesLatex, at).toHaveLength(lines.length);
+            // One slip: the lines after it follow from the wrong value.
+            const slipped = bareNumber(lines[wrong]!)!;
+            for (const l of lines.slice(wrong + 1)) expect(bareNumber(l), at).toBeCloseTo(slipped, 9);
+            // The fix is a right next line from the line above, not that line again.
+            expect(["valid", "solved"], at).toContain(checkStep(aboveOf(p.n), fix));
+            expect(sameExpression(fix, aboveOf(p.n)), at).toBe(false);
+            // No number on screen is the answer, so it can't be copied.
+            expect(numeralsIn([expression, ...lines].join(" ")), at).not.toContain(Math.abs(answer));
+          }
+        }
+      }
+    });
+
+    it("walks find, fix, finish to the value, graded by what the lines come to (R-37)", () => {
+      for (const id of WORKED) {
+        const p = working(id);
+        const { wrong, fix, answer } = p.n;
+        expect(play(p, { check: "found_error", line: wrong })).toMatchObject({ outcome: "correct", solved: false });
+        expect(play(p, { check: "fixed_step", text: fix })).toMatchObject({ outcome: "correct", solved: false });
+        const done = play(p, { check: "final_answer", text: String(answer) });
+        expect(done).toMatchObject({ outcome: "correct", solved: true });
+        expect(done?.reply).toContain(`$${answer}$`);
+        expect(gradeMove(p, { check: "final_answer", text: String(answer) }, skin)).toBeNull();
+      }
+    });
+
+    it("asks about the tapped line instead of saying which is wrong (R-03)", () => {
+      for (const id of WORKED) {
+        const p = working(id);
+        const other = p.n.wrong === 0 ? 1 : 0;
+        const v = play(p, { check: "found_error", line: other });
+        expect(v).toMatchObject({ outcome: "incorrect", ask: REPAIRS[id]!.asks.wrong_line });
+        expect(v?.ask?.ask).not.toMatch(/\d/);
+      }
+    });
+
+    it("takes any right next line as the fix, and asks about skipping, copying, the same slip and the rest", () => {
+      const id = "repair-integer-signs";
+      const asks = REPAIRS[id]!.asks;
+      const p = seedWhere(id, (n) => !isNumeralText(n.fix) && n.answer !== 0 && !near(bareNumber(n.lines.at(-1)!)!, -n.answer));
+      const { wrong, lines, fix, answer, fixSlips } = p.n;
+      const above = aboveOf(p.n);
+      play(p, { check: "found_error", line: wrong });
+      expect(play(p, { check: "fixed_step", text: String(answer) })?.ask).toEqual(asks.skipped);
+      expect(play(p, { check: "fixed_step", text: above })?.ask).toEqual(asks.copied);
+      expect(play(p, { check: "fixed_step", text: lines[wrong]! })?.ask).toEqual(asks.sign);
+      expect(play(p, { check: "fixed_step", text: String(fixSlips[0]!.value) })?.ask).toEqual(asks.sign);
+      expect(play(p, { check: "fixed_step", text: `${above} + 1000` })?.ask).toEqual(asks.fix_other);
+      expect(play(p, { check: "fixed_step", text: "x = 3" })?.outcome).toBe("unreadable");
+      expect(play(p, { check: "fixed_step", text: "" })?.outcome).toBe("unreadable");
+      // Any line that comes to the value counts, written the way they like.
+      expect(play(p, { check: "fixed_step", text: `(${fix})` })).toMatchObject({ outcome: "correct", solved: false });
+      // The finish is one number: a true line that isn't finished, the old lines' answer and the lost sign get asks.
+      expect(play(p, { check: "final_answer", text: fix })?.ask).toEqual(asks.not_done);
+      expect(play(p, { check: "final_answer", text: lines.at(-1)! })?.ask).toEqual(asks.old_answer);
+      expect(play(p, { check: "final_answer", text: String(-answer) })?.ask).toEqual(asks.sign_lost);
+      expect(play(p, { check: "final_answer", text: String(answer + 1000) })?.ask).toEqual(asks.final_other);
+      expect(play(p, { check: "final_answer", text: "x = 5" })?.outcome).toBe("unreadable");
+      expect(play(p, { check: "final_answer", text: String(answer) })).toMatchObject({ outcome: "correct", solved: true });
+    });
+
+    it("plants the sign slip on a product or quotient of signed numbers (integer signs)", () => {
+      for (let seed = 1; seed <= 50; seed++) {
+        const p = working("repair-integer-signs", seed);
+        expect(p.item.skill_id).toBe("integer_arithmetic");
+        const { expression, lines, wrong, fixSlips } = p.n;
+        expect(aboveOf(p.n)).toMatch(/[*/]/);
+        expect(fixSlips).toEqual([{ value: bareNumber(lines[wrong]!), key: "sign" }]);
+        // Level 3 numbers at every level, so there's a signed product or quotient to get wrong.
+        expect(expression).toMatch(/-/);
+      }
+    });
+
+    it("works the problem left to right for the precedence slip, and skips the brackets for the brackets slip", () => {
+      for (const level of LEVELS) {
+        for (let seed = 1; seed <= 50; seed++) {
+          const p = working("repair-order-precedence", seed, level);
+          expect(p.item.skill_id).toBe("order_of_operations");
+          expect(p.n.lines).toEqual(workOut(p.n.expression, "left_to_right")!.lines);
+          expect(p.n.fixSlips[0]!.key).toBe("left_first");
+          const q = working("repair-order-brackets", seed, level);
+          expect(q.item.skill_id).toBe("order_of_operations");
+          expect(q.n.expression).toContain("(");
+          expect(q.n.lines).toEqual(workOut(unbracketed(q.n.expression), "usual")!.lines);
+          // Skipping the brackets goes wrong on the first line.
+          expect(q.n.wrong).toBe(0);
+          expect(q.n.fixSlips[0]!.key).toBe("bracket");
+        }
+      }
+    });
+
+    it("gives no hint with a number in it, so none can hold the answer (R-02)", () => {
+      for (const id of WORKED) {
+        for (let seed = 1; seed <= 20; seed++) {
+          const p = working(id, seed);
+          for (let i = 0; i < 3; i++, p.hints++) expect(nextHint(p, skin)).not.toMatch(/\d/);
+          expect(nextHint(p, skin)).toBeNull();
+        }
+      }
+    });
+  });
+
+  describe("integer subtraction (the middle line)", () => {
+    const id = "repair-integer-subtraction";
+
+    it("shows a three-number sum with its middle line missing, and the last number taken away", () => {
+      for (const level of LEVELS) {
+        for (let seed = 1; seed <= 50; seed++) {
+          const p = repair<"missing_step">(id, seed, level);
+          const at = `L${level} seed ${seed}: ${p.n.equation}`;
+          expect(p.item.skill_id).toBe("integer_arithmetic");
+          const m = /^(-?\d+) ([+-]) (\d+) - (\d+)$/.exec(p.n.equation);
+          expect(m, at).not.toBeNull();
+          expect(p.n.blank, at).toBe("working");
+          expect(p.n.linesLatex[0], at).toBeNull();
+          expect(p.n.linesLatex, at).toHaveLength(2);
+          expect(p.n.expected, at).toMatch(/^-?\d+ - \d+$/);
+          expect(bareNumber(p.n.expected), at).toBe(p.n.answer);
+          expect(bareNumber(p.n.equation), at).toBe(p.n.answer);
+          expect(numeralsIn(p.n.equation), at).not.toContain(Math.abs(p.n.answer));
+          expect(line(p, skin, (i) => i.instructions), at).toContain(`$${m![1]} ${m![2]} ${m![3]}$`);
+          for (let i = 0; i < 3; i++, p.hints++) expect(nextHint(p, skin), at).not.toContain(`$${p.n.answer}$`);
+        }
+      }
+    });
+
+    it("takes the middle line in either order, and asks about a plus for the minus, skipping and copying", () => {
+      const asks = REPAIRS[id]!.asks;
+      const p = repair<"missing_step">(id);
+      const { equation, expected, answer } = p.n;
+      const [mid, n3] = expected.split(" - ").map(Number) as [number, number];
+      const plus = play(p, { check: "missing_line", text: `${mid} + ${n3}` });
+      expect(plus?.ask?.ask).toBe(`Look at the sign in front of the $${n3}$. Does it add it on, or take it away?`);
+      expect(plus?.ask?.nudge).toBe(asks.plus_for_minus!.nudge);
+      expect(play(p, { check: "missing_line", text: String(answer) })?.ask?.ask).toBe(asks.skipped!.ask);
+      expect(play(p, { check: "missing_line", text: equation })?.ask?.ask).toBe(asks.copied!.ask);
+      expect(play(p, { check: "missing_line", text: `${expected} - 1000` })?.ask?.ask).toBe(asks.other!.ask);
+      expect(play(p, { check: "missing_line", text: "x - 3" })?.outcome).toBe("unreadable");
+      const done = play(p, { check: "missing_line", text: `${-n3} + (${mid})` });
+      expect(done).toMatchObject({ outcome: "correct", solved: true });
+      expect(done?.reply).toContain(`$${answer}$`);
+    });
+
+    it("asks about the first minus read as a plus when there are two", () => {
+      const asks = REPAIRS[id]!.asks;
+      for (let seed = 1; seed <= 200; seed++) {
+        const p = repair<"missing_step">(id, seed, 2);
+        const m = /^(-?\d+) - (\d+) - (\d+)$/.exec(p.n.equation);
+        if (!m) continue;
+        const [n1, n2, n3] = m.slice(1).map(Number) as [number, number, number];
+        if (!p.n.slips?.some((s) => s.key === "first_plus" && s.value === n1 + n2 - n3)) continue;
+        const v = play(p, { check: "missing_line", text: `${n1 + n2} - ${n3}` });
+        expect(v?.ask?.ask).toBe(`What does $${n1} - ${n2}$ make? Look at the sign between those two numbers.`);
+        expect(v?.ask?.nudge).toBe(asks.first_plus!.nudge);
+        return;
+      }
+      throw new Error("no sum with two minuses in 200 seeds");
+    });
+
+    it("has negatives at level 2 and small positive numbers at level 1", () => {
+      const level2 = Array.from({ length: 100 }, (_, i) => repair<"missing_step">(id, i + 1, 2).n);
+      expect(level2.some((n) => n.a < 0 || n.answer < 0)).toBe(true);
+      for (let seed = 1; seed <= 100; seed++) {
+        const { a, answer } = repair<"missing_step">(id, seed, 1).n;
+        expect(a > 0 && answer >= 0).toBe(true);
       }
     });
   });

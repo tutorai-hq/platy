@@ -186,6 +186,8 @@ export const OFF_TOPIC = "Let's keep this about the problem. What's the first th
 
 // Step-by-step lines (R-48).
 export const STEP_UNREADABLE = "I couldn't read that line. Write it as an equation with x, like the line above.";
+/** On an expression to work out, where a line is numbers and operations, not an equation. */
+export const STEP_UNREADABLE_VALUE = "I couldn't read that line. Write it with numbers and signs, like the line above.";
 export const STEP_IN_LINES = "Write it as the next line in your solution, so I can check each step.";
 
 export const UNREADABLE = "Hmm, I couldn't read that as a number. Try something like x = 4.";
@@ -205,6 +207,8 @@ export const EXPLAIN_FIRST = "Tell me what you were thinking first, then I'll he
 export const NO_ANSWERS_TRY_FIRST =
   "I won't give the answer, because working it out is how you learn it. Try once first, even a guess, and then I'll help.";
 export const PUZZLE_UNREADABLE = "I couldn't read that one. Write it as an equation with x, like the lines above.";
+/** On a puzzle that works an expression out (the integer and order repairs). */
+export const PUZZLE_UNREADABLE_VALUE = "I couldn't read that one. Write it with numbers and signs, like the lines above.";
 export const PUZZLE_NUDGE = "Try it in the puzzle. Ask me if you get stuck.";
 /** After the student has answered a puzzle's reflection question and been thanked (R-03). */
 export const KEEP_GOING_READY = "Tap Keep going when you're ready.";
@@ -217,6 +221,29 @@ export const ONE_MORE = "Now a new one, to check the fix holds. Same kind of pro
 
 /** A generated problem (R-41) as a step-by-step problem, with lines that fit any numbers. */
 export function confirmProblem(problem_id: string, skill_id: string, prompt: string, solution: number, answerText: string): ScriptedProblem {
+  // An expression to work out (no equals sign): the lines are its working, not steps in x.
+  if (!prompt.includes("=")) {
+    return {
+      problem_id,
+      skill_id,
+      prompt,
+      instruction: "Work it out one line at a time",
+      format: "steps",
+      variable: null,
+      solutions: [solution],
+      intro: [ONE_MORE],
+      hints: [
+        "What comes first here? Brackets, then multiplying and dividing, then adding and taking away.",
+        "Do one operation per line, and keep the sign with each number.",
+        "Check each line against the one above it. Does it still come to the same thing?",
+      ],
+      askWhy: "That line doesn't come to the same thing as the one above yet. What did you work out?",
+      afterWhy: "Thanks. One operation at a time, and check each line against the one above, then try that line again.",
+      secondMiss: "Look at the marked line next to the one above it. Which part changed in a different way?",
+      misconceptions: [],
+      correct: [`Yes, $${answerText}$, and every line checks out. The fix held.`],
+    };
+  }
   return {
     problem_id,
     skill_id,
