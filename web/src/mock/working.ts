@@ -335,6 +335,12 @@ export function sameExpression(a: string, b: string): boolean {
   return x !== null && y !== null && print(x) === print(y);
 }
 
+/** One key for every way of writing an expression, or null when the text isn't one. */
+export function expressionKey(text: string): string | null {
+  const x = expression(text);
+  return x === null ? null : print(x);
+}
+
 /** The numbers added and taken away, signs included, or null for anything with a product in it. */
 function terms(n: Node, sign = 1): number[] | null {
   if (isNumeral(n)) return [sign * numValue(n)];

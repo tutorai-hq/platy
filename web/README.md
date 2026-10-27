@@ -141,8 +141,8 @@ src/
     index.ts             picks mock unless VITE_PLATY_SERVER_URL is set
   mock/                  scripted lesson, answer, step and slip checking, and puzzle items, skins,
                          problem generators and grading (all go away with the real backend)
-  content/               puzzle types, balance-scale moves, team-color palette, slip map, and the
-                         words for the primer view, the map and the confidence check
+  content/               puzzle types, balance-scale moves, team-color palette, slip map, item
+                         catalog, and the words for the primer view, the map and the confidence check
   math/                  child-math parser, LaTeX output, KaTeX rendering, keypad keys, and the
                          terms of each line for the step solver's motion
   session/               reducer + hook holding all session state in memory
@@ -204,6 +204,16 @@ server (`docs/proposals/generators-python.md`). Every slip on the demo path has 
 generated problem worked out a line at a time with one line wrong: `src/mock/working.ts` writes
 the lines the way a student would and finds the wrong one by what the lines come to, never by
 where the slip was planted. Subtraction read as addition gets a sum with its middle line missing.
+
+The item catalog (R-37): `src/content/catalog.json` holds one descriptor per item, keyed to
+skill-map node ids, with its format and player, role, skills, the slips it repairs, angle,
+difficulty levels, interest tags and reading level, in plain JSON for the server's pydantic model
+to load later. `src/content/catalog.ts` validates it by hand when it loads: an unknown field, a
+skill that isn't a node, a slip not in the slip map, a value outside its vocabulary or a mismatch
+with `slips.json`'s repairs all fail, and the mock reads an item's skill and player from it. No
+item is ever built on a skill-map probe's equation (R-01): the generators re-draw past one, and
+`src/content/catalog.test.ts` checks every item over every level and seed.
+`docs/proposals/item-descriptor.md` lists the fields and the open questions for Connor.
 
 The primer view (R-42, proposed for Connor to accept) adds `primer_state {mastery, hypothesis,
 move}` from the server, sent after each of the primer's moves to a demo session only. It carries

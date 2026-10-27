@@ -1,14 +1,16 @@
 import { applyMove, isSolved } from "../content/balance";
+import { PROBE_EQUATIONS, skillOf } from "../content/catalog";
 import { balanceStage, missingStage, type Outcomes, spotStage, workedStage } from "../content/progress";
 import type {
   CheckId, CheckOutcome, PaletteId, Pans, Puzzle, PuzzleMove, PuzzleTemplate, Skin, WorkedExamplePuzzle,
 } from "../content/types";
 import {
-  balance, type BalanceInstance, isOneOf, lastStep, type Level, type MissingInstance, missingStep, oneStepBalance, oneStepLine,
-  orderChain, type Rng, signChain, type SpotInstance, spotTheError, sumLine, type WorkedInstance, workedExample, type WorkingSpotInstance,
+  balance, type BalanceInstance, equationKey, isOneOf, lastStep, type Level, type MissingInstance, missingStep, oneStepBalance,
+  oneStepLine, orderChain, type Rng, signChain, type SpotInstance, spotTheError, sumLine, type WorkedInstance, workedExample,
+  type WorkingSpotInstance,
 } from "./generate";
 import { bareNumber, hasSolution, near, readable, sameLine } from "./grade";
-import { isNumeralText, sameExpression, sameSum } from "./working";
+import { expressionKey, isNumeralText, sameExpression, sameSum } from "./working";
 
 // Mock-only puzzle items, interest skins and grading. They stand in for the server (R-37,
 // R-38): pick an item, generate an instance, resolve the skin, grade each move, and pick the
@@ -56,10 +58,12 @@ export interface Ask {
   nudge: string;
 }
 
+/**
+ * An item's text. Its skill, player and the rest of its metadata are in the catalog
+ * (content/catalog.json, R-37), read by `item_id`.
+ */
 export interface Item {
   item_id: string;
-  template: PuzzleTemplate;
-  skill_id: string;
   /** The tutor's line as the puzzle opens. */
   intro: string;
   instructions: string;
@@ -78,8 +82,6 @@ export interface Item {
 // item with its own lines; this first one is all watching, then a "why" (R-03).
 const watch: Item = {
   item_id: "lin2-worked-example",
-  template: "worked_example",
-  skill_id: "two_step_equations",
   intro: "Here's how {player} from the {team} solves a two-step equation. Read it a step at a time.",
   instructions: "Read each step, then say why the first one works.",
   hints: [
@@ -135,8 +137,6 @@ const watch: Item = {
 export const ITEMS: Record<PuzzleTemplate, Item> = {
   spot_the_error: {
     item_id: "lin2-undo-sign-spot-error",
-    template: "spot_the_error",
-    skill_id: "two_step_equations",
     intro: "{player} from the {team} solved this one, but something went wrong. Let's find it.",
     instructions: "One line in this solution is wrong. Tap it, then write what it should say.",
     hints: [
@@ -184,8 +184,6 @@ export const ITEMS: Record<PuzzleTemplate, Item> = {
   },
   missing_step: {
     item_id: "lin2-missing-step",
-    template: "missing_step",
-    skill_id: "two_step_equations",
     intro: "{player} solved this for the {team}, but a line went missing.",
     instructions: "One line of {player}'s solution is missing. Write the line that goes in the gap.",
     hints: [
@@ -215,8 +213,6 @@ export const ITEMS: Record<PuzzleTemplate, Item> = {
   },
   balance: {
     item_id: "lin2-balance",
-    template: "balance",
-    skill_id: "two_step_equations",
     intro: "This one's a balance scale, and every {container} holds the same number of {units}. How many?",
     instructions: "Get one {container} alone without tipping the scale.",
     hints: [
@@ -294,8 +290,6 @@ export const REPAIRS: Record<string, Item> = {
   // coefficient_subtracted_after_constant: the b came off, then the a was taken away.
   "repair-two-step-coefficient": {
     item_id: "repair-two-step-coefficient",
-    template: "missing_step",
-    skill_id: "two_step_equations",
     intro: "{player} from the {team} got halfway through this one. Can you finish it?",
     instructions: "Line 1 is right. Write the last line, with x alone on one side.",
     hints: [
@@ -326,8 +320,6 @@ export const REPAIRS: Record<string, Item> = {
   // undo_with_same_operation: adding was "undone" by adding again.
   "repair-inverse-undo": {
     item_id: "repair-inverse-undo",
-    template: "balance",
-    skill_id: "inverse_operations",
     intro: "A balance scale: one {container} plus some loose {units} on one side. How many {units} are in the {container}?",
     instructions: "Get the {container} alone without tipping the scale.",
     hints: [
@@ -362,8 +354,6 @@ export const REPAIRS: Record<string, Item> = {
   // undo_scale_by_repeating and undo_scale_with_negative: multiplying undone the wrong way.
   "repair-inverse-divide": {
     item_id: "repair-inverse-divide",
-    template: "balance",
-    skill_id: "inverse_operations",
     intro: "A balance scale with {containers} on one side and loose {units} on the other, every {container} holding the same. How many {units} in each?",
     instructions: "Get one {container} alone without tipping the scale.",
     hints: [
@@ -400,8 +390,6 @@ export const REPAIRS: Record<string, Item> = {
   // or an x that's divided, so those two slips have their own items below.
   "repair-one-step-coefficient": {
     item_id: "repair-one-step-coefficient",
-    template: "balance",
-    skill_id: "one_step_equations",
     intro: "A balance scale: {containers} on one side, loose {units} on the other. Every {container} holds the same number of {units}.",
     instructions: "Get one {container} alone without tipping the scale.",
     hints: [
@@ -436,8 +424,6 @@ export const REPAIRS: Record<string, Item> = {
   // divided_instead_of_multiplied: x/k = c, and the student writes the one line.
   "repair-one-step-multiply": {
     item_id: "repair-one-step-multiply",
-    template: "missing_step",
-    skill_id: "one_step_equations",
     intro: "{player} from the {team} wrote this one down and stopped. Finish it.",
     instructions: "Here x is divided by ${k}$. Write the line with x alone on one side.",
     hints: [
@@ -468,8 +454,6 @@ export const REPAIRS: Record<string, Item> = {
   // coefficient_sign_dropped: -ax = c, and the sign has to come along.
   "repair-one-step-sign": {
     item_id: "repair-one-step-sign",
-    template: "missing_step",
-    skill_id: "one_step_equations",
     intro: "{player} from the {team} got stuck on the sign in this one. Finish it.",
     instructions: "Look at the number next to x, sign and all. Write the line with x alone on one side.",
     hints: [
@@ -501,8 +485,6 @@ export const REPAIRS: Record<string, Item> = {
   // way to undo, and the student writing the one line.
   "repair-one-step-direction": {
     item_id: "repair-one-step-direction",
-    template: "missing_step",
-    skill_id: "one_step_equations",
     intro: "{player} from the {team} wrote this one down and stopped. Finish it.",
     instructions: "Here ${b_abs}$ is {done}. Undo that on both sides, then write the line with x alone.",
     hints: [
@@ -534,8 +516,6 @@ export const REPAIRS: Record<string, Item> = {
   // signed numbers worked out, one with its sign wrong, and the lines after it following from it.
   "repair-integer-signs": {
     item_id: "repair-integer-signs",
-    template: "spot_the_error",
-    skill_id: "integer_arithmetic",
     intro: "{player} from the {team} worked this out, but a sign went wrong somewhere. Let's find it.",
     instructions: "One line of this working is wrong. Tap it, then write what it should say.",
     hints: [
@@ -562,8 +542,6 @@ export const REPAIRS: Record<string, Item> = {
   // number has to be taken away, not added on.
   "repair-integer-subtraction": {
     item_id: "repair-integer-subtraction",
-    template: "missing_step",
-    skill_id: "integer_arithmetic",
     intro: "{player} from the {team} worked this out, but the middle line went missing.",
     instructions: "Write line 1: what ${first}$ makes, with the last number still to take away.",
     hints: [
@@ -603,8 +581,6 @@ export const REPAIRS: Record<string, Item> = {
   // line where that first changes the value.
   "repair-order-precedence": {
     item_id: "repair-order-precedence",
-    template: "spot_the_error",
-    skill_id: "order_of_operations",
     intro: "{player} from the {team} worked this out, but one line went wrong. Let's find it.",
     instructions: "One line of this working is wrong. Tap it, then write what it should say.",
     hints: [
@@ -630,8 +606,6 @@ export const REPAIRS: Record<string, Item> = {
   // brackets_ignored: the problem worked with its brackets skipped, wrong from the first line.
   "repair-order-brackets": {
     item_id: "repair-order-brackets",
-    template: "spot_the_error",
-    skill_id: "order_of_operations",
     intro: "{player} from the {team} worked this out, but one line went wrong. Let's find it.",
     instructions: "One line of this working is wrong. Tap it, then write what it should say.",
     hints: [
@@ -725,6 +699,30 @@ export type LivePuzzle =
 
 /** The fade only applies to a worked example; the primer would set it from mastery. */
 export function newPuzzle(template: PuzzleTemplate, rng: Rng, instance_id: string, fade: Fade = 0): LivePuzzle {
+  for (;;) {
+    const live = drawPuzzle(template, rng, instance_id, fade);
+    if (!showsProbe(live)) return live;
+  }
+}
+
+/**
+ * True when the puzzle is built on a skill-map probe's equation. No item may show one (R-01,
+ * R-37): it would hand the student that probe's answer and spoil the diagnosis. The balance scale
+ * drew the two-step probe "3x + 4 = 19" at one seed in 300 before this check.
+ */
+export function showsProbe(live: LivePuzzle): boolean {
+  const problem = problemOf(live);
+  const equation = equationKey(problem);
+  const expression = expressionKey(problem);
+  return (equation !== null && PROBE_EQUATION_KEYS.has(equation)) || (expression !== null && PROBE_EXPRESSION_KEYS.has(expression));
+}
+
+// The probes, parsed once: every puzzle draw checks against them.
+const keysOf = (key: (text: string) => string | null) => new Set(PROBE_EQUATIONS.flatMap((p) => (key(p) === null ? [] : [key(p)!])));
+const PROBE_EQUATION_KEYS: ReadonlySet<string> = keysOf(equationKey);
+const PROBE_EXPRESSION_KEYS: ReadonlySet<string> = keysOf(expressionKey);
+
+function drawPuzzle(template: PuzzleTemplate, rng: Rng, instance_id: string, fade: Fade): LivePuzzle {
   const base = { item: ITEMS[template], instance_id, outcomes: {}, tried: false, hints: 0, misses: 0 };
   switch (template) {
     case "spot_the_error":
@@ -743,7 +741,7 @@ export function newPuzzle(template: PuzzleTemplate, rng: Rng, instance_id: strin
 /**
  * A puzzle for an item, by id. Repair items take their numbers from the generators at the
  * student's level. No item uses a problem from the student's lesson (`avoid`), so a puzzle can't
- * walk through one they still have to solve (R-02).
+ * walk through one they still have to solve (R-02), and none uses a probe's equation (R-01).
  */
 export function newItemPuzzle(
   item_id: string,
@@ -752,6 +750,13 @@ export function newItemPuzzle(
   level: Level = 1,
   avoid: readonly string[] = [],
 ): LivePuzzle {
+  for (;;) {
+    const live = drawItem(item_id, rng, instance_id, level, avoid);
+    if (!showsProbe(live)) return live;
+  }
+}
+
+function drawItem(item_id: string, rng: Rng, instance_id: string, level: Level, avoid: readonly string[]): LivePuzzle {
   const base = { instance_id, outcomes: {}, tried: false, hints: 0, misses: 0 };
   const item = REPAIRS[item_id];
   switch (item_id) {
@@ -815,7 +820,7 @@ export function toWire(live: LivePuzzle, skin: Skin): Puzzle {
   const base = {
     item_id: live.item.item_id,
     instance_id: live.instance_id,
-    skill_id: live.item.skill_id,
+    skill_id: skillOf(live.item.item_id),
     instructions: line(live, skin, (i) => i.instructions),
     equation: live.n.latex,
     skin,

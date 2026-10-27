@@ -465,6 +465,12 @@ function equationOf(text: string): Omit<Numbers, "answer"> | null {
   return s && near(s[1].slope, 0) ? { a: s[0].slope, b: s[0].constant, c: s[1].constant } : null;
 }
 
+/** One key for every way of writing an "ax + b = c" equation, or null for anything else. */
+export function equationKey(text: string): string | null {
+  const e = equationOf(text);
+  return e && [e.a, e.b, e.c].map((v) => Math.round(v * 1e6) / 1e6).join(",");
+}
+
 /** True when `text` is the same equation as one of `others`, however each is written. */
 export function isOneOf(text: string, others: readonly string[]): boolean {
   const e = equationOf(text);

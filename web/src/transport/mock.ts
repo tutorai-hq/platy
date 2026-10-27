@@ -1,3 +1,4 @@
+import { skillOf, templateOf } from "../content/catalog";
 import { REASON_CODES, STEP_CODES } from "../content/confidence";
 import type { PaletteId, PuzzleMove, PuzzleTemplate } from "../content/types";
 import { answerExample, checkAnswer, matchesValue, readAnswer } from "../mock/answers";
@@ -373,13 +374,14 @@ export class MockTransport implements TutorTransport {
         this.think("mark_line", slip ? "slip_matched" : "line_invalid", node);
         const repair = slip ? slipRepair(slip) : null;
         const item = repair ? itemFor(repair) : null;
+        const player = item ? templateOf(item.item_id) : null;
         const below = PROBE_BELOW[p.skill_id];
         if (below && !this.probed) {
           // The first miss: find out what's underneath before teaching anything (R-01).
           this.probed = true;
           await this.say(PROBE_LEAD);
           this.offer(DETOUR_PROBE, () => this.startProbe(p, [below]));
-        } else if (item && !this.repaired) {
+        } else if (item && player && !this.repaired) {
           // A slip with a repair puzzle: work on that move there first, then a fresh problem (R-37).
           this.repaired = true;
           this.confirm = true;
@@ -388,7 +390,7 @@ export class MockTransport implements TutorTransport {
           // would walk the student to this problem's answer (R-02).
           const lines = [...this.stepLines];
           await this.say(STEP_REPAIR_LEAD);
-          this.offer(DETOUR_PUZZLE, () => this.startPuzzle(item.template, null, item.item_id, lines));
+          this.offer(DETOUR_PUZZLE, () => this.startPuzzle(player, null, item.item_id, lines));
         } else if (this.misses >= 3 && !this.pivoted) {
           await this.suggestPause(); // R-21, as for a problem's answers
         } else if (this.misses === 1) {
@@ -404,7 +406,7 @@ export class MockTransport implements TutorTransport {
 
   private async suggestPause(): Promise<void> {
     this.paused = true;
-    const skill = this.current?.skill_id ?? this.puzzle?.item.skill_id;
+    const skill = this.current?.skill_id ?? (this.puzzle ? skillOf(this.puzzle.item.item_id) : undefined);
     if (skill) this.think("pause", "three_misses", skill);
     await this.say(TAKE_A_BREATH);
     this.out({ type: "pause_suggested" });
@@ -562,8 +564,9 @@ export class MockTransport implements TutorTransport {
     } else {
       if (v.reply) await this.say(v.reply);
       if (v.solved) {
-        this.primer.observe(live.item.skill_id, true);
-        this.think(this.confirm ? "repair" : "teach", "puzzle_solved", live.item.skill_id);
+        const skill = skillOf(live.item.item_id);
+        this.primer.observe(skill, true);
+        this.think(this.confirm ? "repair" : "teach", "puzzle_solved", skill);
         this.reflecting = true;
         await this.say(line(live, skin, (i) => i.reflection));
       }

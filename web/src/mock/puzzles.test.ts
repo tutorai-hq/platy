@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { skillOf } from "../content/catalog";
 import { PALETTE } from "../content/palette";
 import type { PuzzleMove, PuzzleTemplate, Skin } from "../content/types";
 import { isOneOf, type Level, LEVELS, seeded, type WorkingSpotInstance } from "./generate";
@@ -75,8 +76,8 @@ describe("interest skins", () => {
 describe("puzzle items", () => {
   it("fills every line of text for every skin, with no slot left over", () => {
     const walkthrough = [...WALKTHROUGH.reasons, WALKTHROUGH.why, ...WALKTHROUGH.choices.map((c) => c.text)];
-    for (const item of [...TEMPLATES.map((t) => ITEMS[t]), ...WORKED_FADES]) {
-      const template = item.template;
+    const items = [...TEMPLATES.map((t) => [t, ITEMS[t]] as const), ...WORKED_FADES.map((i) => ["worked_example", i] as const)];
+    for (const [template, item] of items) {
       const texts = [
         item.intro, item.instructions, item.reflection, item.thanks, ...item.hints,
         ...Object.values(item.replies), ...Object.values(item.asks).flatMap((a) => [a.ask, a.nudge]),
@@ -448,7 +449,7 @@ describe("repair items", () => {
     it("shows a times-x scale with nothing loose on its side: one split, then x is alone", () => {
       for (let seed = 1; seed <= 50; seed++) {
         const p = repair<"balance">("repair-one-step-coefficient", seed);
-        expect(p.item.skill_id).toBe("one_step_equations");
+        expect(skillOf(p.item.item_id)).toBe("one_step_equations");
         expect(p.n.start.left).toEqual({ x: p.n.a, units: 0 });
         expect(p.n.answer).not.toBe(p.n.a);
         expect(p.n.start.right.units).toBeLessThanOrEqual(30);
@@ -657,7 +658,7 @@ describe("repair items", () => {
     it("plants the sign slip on a product or quotient of signed numbers (integer signs)", () => {
       for (let seed = 1; seed <= 50; seed++) {
         const p = working("repair-integer-signs", seed);
-        expect(p.item.skill_id).toBe("integer_arithmetic");
+        expect(skillOf(p.item.item_id)).toBe("integer_arithmetic");
         const { expression, lines, wrong, fixSlips } = p.n;
         expect(aboveOf(p.n)).toMatch(/[*/]/);
         expect(fixSlips).toEqual([{ value: bareNumber(lines[wrong]!), key: "sign" }]);
@@ -670,11 +671,11 @@ describe("repair items", () => {
       for (const level of LEVELS) {
         for (let seed = 1; seed <= 50; seed++) {
           const p = working("repair-order-precedence", seed, level);
-          expect(p.item.skill_id).toBe("order_of_operations");
+          expect(skillOf(p.item.item_id)).toBe("order_of_operations");
           expect(p.n.lines).toEqual(workOut(p.n.expression, "left_to_right")!.lines);
           expect(p.n.fixSlips[0]!.key).toBe("left_first");
           const q = working("repair-order-brackets", seed, level);
-          expect(q.item.skill_id).toBe("order_of_operations");
+          expect(skillOf(q.item.item_id)).toBe("order_of_operations");
           expect(q.n.expression).toContain("(");
           expect(q.n.lines).toEqual(workOut(unbracketed(q.n.expression), "usual")!.lines);
           // Skipping the brackets goes wrong on the first line.
@@ -703,7 +704,7 @@ describe("repair items", () => {
         for (let seed = 1; seed <= 50; seed++) {
           const p = repair<"missing_step">(id, seed, level);
           const at = `L${level} seed ${seed}: ${p.n.equation}`;
-          expect(p.item.skill_id).toBe("integer_arithmetic");
+          expect(skillOf(p.item.item_id)).toBe("integer_arithmetic");
           const m = /^(-?\d+) ([+-]) (\d+) - (\d+)$/.exec(p.n.equation);
           expect(m, at).not.toBeNull();
           expect(p.n.blank, at).toBe("working");
