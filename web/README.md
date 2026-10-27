@@ -148,6 +148,8 @@ src/
   session/               reducer + hook holding all session state in memory
   components/            ProblemCard, StepSolver, ConfidenceCheck, PuzzlePlayer (+ puzzles/),
                          MathInput, Chat, YourMap, PrimerPanel, Overlays, Mascot
+scripts/
+  coverage.mjs           writes docs/content/coverage.md from the catalog (npm run coverage)
 ```
 
 ### Pointing it at a real server
@@ -214,6 +216,10 @@ with `slips.json`'s repairs all fail, and the mock reads an item's skill and pla
 item is ever built on a skill-map probe's equation (R-01): the generators re-draw past one, and
 `src/content/catalog.test.ts` checks every item over every level and seed.
 `docs/proposals/item-descriptor.md` lists the fields and the open questions for Connor.
+`npm --prefix web run coverage` writes `docs/content/coverage.md`, the skill × role grid of what
+the catalog covers (with the mock's generators counted as practice), the demo path's gaps, slips
+with no repair and skills with only one angle; `src/content/coverage.test.ts` fails while that
+file is stale. The script runs the TypeScript through Vite, so it needs nothing beyond `npm install`.
 
 The primer view (R-42, proposed for Connor to accept) adds `primer_state {mastery, hypothesis,
 move}` from the server, sent after each of the primer's moves to a demo session only. It carries
