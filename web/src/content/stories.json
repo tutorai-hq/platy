@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "about": "Story problems (R-37): short stories in the student's interest that turn into a two-step equation, solved line by line. Slots {team}, {player}, {unit}, {units}, {container}, {containers} come from the skin (R-38, made-up teams only); {a}, {b} and {c} from the generator, with x the thing the story asks for ('unknown'). 'form' is the equation the story claims. 'hints' are about the story and never give the equation (R-02); each slip is a wrong setup offered beside the right one, with the story question the tutor asks when it's picked. Read by web/src/mock/stories.ts; the catalog's descriptors are story-<id>.",
+  "stories": [
+    {
+      "id": "points-a-game",
+      "form": "ax + b = c",
+      "unknown": "games",
+      "text": "The {team} have {b} points so far this season. They win {a} points a game. How many more games until they have {c} points?",
+      "hints": [
+        "What changes each game, and what stays the same?",
+        "Where do the {b} points come from: before these games, or during them?"
+      ],
+      "slips": [
+        { "form": "ax - b = c", "hint": "The {team} start with {b} points. Do those get added to the total, or taken off it?" },
+        { "form": "bx + a = c", "hint": "What changes each game, and by how much?" }
+      ]
+    },
+    {
+      "id": "saving-up",
+      "form": "ax + b = c",
+      "unknown": "days",
+      "text": "{player} has {b} {units}. Each day brings {a} more. In how many days will {player} have {c} {units}?",
+      "hints": [
+        "What does {player} start with, and what changes each day?",
+        "Which number happens once, and which happens every day?"
+      ],
+      "slips": [
+        { "form": "ax - b = c", "hint": "The {b} {units} were there at the start. Are they added to the total, or taken away?" },
+        { "form": "bx + a = c", "hint": "What changes each day, and by how much?" }
+      ]
+    },
+    {
+      "id": "packing-bags",
+      "form": "ax + b = c",
+      "unknown": "bags",
+      "text": "The {team} put {a} {units} in each {container}. There are {b} left over, and {c} {units} in all. How many {containers} did they fill?",
+      "hints": [
+        "Which number is in every {container}, and which is counted only once?",
+        "If there were one more {container}, how many more {units} would there be?"
+      ],
+      "slips": [
+        { "form": "ax - b = c", "hint": "The {units} left over are still counted. Do they add to the total, or come off it?" },
+        { "form": "bx + a = c", "hint": "What goes in every {container}, and what is counted once?" }
+      ]
+    },
+    {
+      "id": "given-away",
+      "form": "ax - b = c",
+      "unknown": "weeks",
+      "text": "{player} gets {a} {units} a week for the {team}. So far {player} has given {b} away and has {c} left. How many weeks has it been?",
+      "hints": [
+        "What comes in every week, and what went out once?",
+        "Did giving {b} {units} away make the total go up or down?"
+      ],
+      "slips": [
+        { "form": "ax + b = c", "hint": "The {b} {units} were given away. Does that make the total go up or down?" },
+        { "form": "bx - a = c", "hint": "What comes in every week, and how many at a time?" }
+      ]
+    },
+    {
+      "id": "season-penalty",
+      "form": "ax - b = c",
+      "unknown": "games",
+      "text": "The {team} get {a} points a game. A penalty took {b} points off, and they finished on {c}. How many games did they play?",
+      "hints": [
+        "Which number happens once, and which happens every game?",
+        "Did the penalty make the total go up or down?"
+      ],
+      "slips": [
+        { "form": "ax + b = c", "hint": "A penalty takes points away. Does that add to the total, or take from it?" },
+        { "form": "bx - a = c", "hint": "What happens every game, and what happened once?" }
+      ]
+    }
+  ]
+}

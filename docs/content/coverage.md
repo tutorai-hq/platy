@@ -6,7 +6,7 @@ Skill-map nodes in map order, one column per role. A cell lists the items whose 
 (`web/src/content/catalog.json`, R-37); `generator` is the mock's problem generator (R-41) at its levels;
 — is empty.
 
-24 items; 15 of 96 cells filled.
+29 items; 16 of 96 cells filled.
 
 | Skill | teach | practice | repair | review | apply | hook |
 |---|---|---|---|---|---|---|
@@ -21,7 +21,7 @@ Skill-map nodes in map order, one column per role. A cell lists the items whose 
 | **Writing expressions**<br>`writing_expressions` | — | — | — | — | — | — |
 | **One-step equations**<br>`one_step_equations` | teach-one-step-balance, teach-one-step-worked | generator L1–L3 | 4 items[^1] | — | — | — |
 | **Equations with a fraction coefficient**<br>`fraction_coefficient_equations` | — | — | — | — | — | — |
-| **Two-step equations**<br>`two_step_equations` | lin2-worked-example, teach-two-step-balance | generator L1–L3 | 4 items[^2] | — | — | — |
+| **Two-step equations**<br>`two_step_equations` | lin2-worked-example, teach-two-step-balance | generator L1–L3 | 4 items[^2] | — | 5 items[^3] | — |
 | **Multi-step equations**<br>`multi_step_equations` | — | — | — | — | — | — |
 | **Equations with fractions**<br>`equations_with_fractions` | — | — | — | — | — | — |
 | **Variables on both sides**<br>`variables_both_sides` | — | — | — | — | — | — |
@@ -33,7 +33,7 @@ Skill-map nodes in map order, one column per role. A cell lists the items whose 
 - **Order of operations** (`order_of_operations`): review, apply, hook
 - **Inverse operations** (`inverse_operations`): review, apply, hook
 - **One-step equations** (`one_step_equations`): review, apply, hook
-- **Two-step equations** (`two_step_equations`): review, apply, hook
+- **Two-step equations** (`two_step_equations`): review, hook
 
 ## Slips with no repair
 
@@ -45,3 +45,4 @@ None.
 
 [^1]: repair-one-step-coefficient, repair-one-step-direction, repair-one-step-multiply, repair-one-step-sign
 [^2]: lin2-balance, lin2-missing-step, lin2-undo-sign-spot-error, repair-two-step-coefficient
+[^3]: story-given-away, story-packing-bags, story-points-a-game, story-saving-up, story-season-penalty

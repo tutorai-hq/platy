@@ -33,7 +33,8 @@ First, the age question (R-36): pick any birth date more than 13 years ago (a mo
 years ago counts as not yet, since there's no day). A later date shows the "Thanks for stopping
 by" screen, which holds until you reload the page.
 
-1. **Problems 1 and 2, `2x + 5 = 17` and `3x - 4 = 11`, line by line (R-48).** Write one step
+1. **Problems 1 and 3, `2x + 5 = 17` and `3x - 4 = 11`, line by line (R-48).** (Problem 2 is a
+   story, item 13.) Write one step
    under the equation and press Enter (or the keypad's **Check** key). A good line gets a check, and the
    algebra moves: a term that crosses the equals sign flies over and flips its sign
    (`2x = 12`), a divisor goes across as `÷ 2` (`x = 6`), a move written out on both sides drops in
@@ -46,12 +47,12 @@ by" screen, which holds until you reload the page.
    as a one-step slip, the skill one level down. Skipping ahead (`x = 6` straight
    away) is fine; a line that isn't an equation gets a nudge.
    With reduced motion on, lines just fade in.
-2. **Problem 3, `3x + 5 = 20`** (answer box). Try `15` first: Platy names the slip ("$3x = 15$ is right, one
+2. **Problem 4, `3x + 5 = 20`** (answer box). Try `15` first: Platy names the slip ("$3x = 15$ is right, one
    more step"). Any other wrong answer gets "what did you do first?" instead of the answer
    (R-02, R-03). Type a reply in the chat and Platy nudges. `x = 5` solves it.
 3. **The reset.** After a correct answer the chat clears with a "fresh page" moment (R-17).
-4. **Problem 4, `2(x - 3) = 10`.** `6.5` shows the "the 2 multiplies the −3 too" catch. `8` solves it.
-5. **Problem 5, `x² = 49`.** Use the **x²** key. `7` alone is "part of the way there"; `±7`,
+4. **Problem 5, `2(x - 3) = 10`.** `6.5` shows the "the 2 multiplies the −3 too" catch. `8` solves it.
+5. **Problem 6, `x² = 49`.** Use the **x²** key. `7` alone is "part of the way there"; `±7`,
    `7, -7` or `x = 7 or x = -7` solves it.
 6. **Three misses on one problem** (or three wrong lines) brings up the pause screen, then an easier warm-up, then
    back to the problem (R-21).
@@ -70,8 +71,8 @@ by" screen, which holds until you reload the page.
    screen, so the newest reply in the chat below it reads whole, and the chat starts a long reply
    at its first line.
 
-8. **Puzzles (R-37).** On problem 3, answer `25/3` (adding the 5 instead of subtracting it).
-   Platy sends you to a spot-the-error puzzle about the same slip, then back to problem 3.
+8. **Puzzles (R-37).** On problem 4, answer `25/3` (adding the 5 instead of subtracting it).
+   Platy sends you to a spot-the-error puzzle about the same slip, then back to problem 4.
    Tap the wrong line, rewrite it, then finish it; Platy asks before it corrects (R-03), gives
    no hint before a first try (R-02), and asks a reflection question at the end (R-30). Answer
    it in the chat: your words stay on screen, Platy thanks you and names the step it asked
@@ -91,7 +92,8 @@ by" screen, which holds until you reload the page.
    three fades (**Demo → Skip** moves through them). Back on `2x + 5 = 17`, another unexplained
    wrong line (say `2x = 98`) gets the same skill from a different angle, a balance scale, never
    the same explanation again (R-05); the panel says `switch_angle`. Write `2x = 22` instead: a
-   repair puzzle on that one move, then a fresh generated problem confirms the fix. Before Platy says whether
+   repair puzzle on that one move, then a fresh generated problem confirms the fix, and the story
+   problem (item 13) applies it. Before Platy says whether
    that fresh problem is right, it asks how sure you are (R-30): three taps, **Guessing**, **Fairly
    sure** or **Certain**, then what made you sure, from a short list; the verdict comes after
    (R-02). That's the session's one confidence check. A session that gets to its end without one
@@ -123,6 +125,16 @@ by" screen, which holds until you reload the page.
    each answer box and **Done** take focus in turn, so Enter moves it along, and the heading and
    the math keep one height, so the answer box never moves between questions. Nothing is kept:
    the adult running the session writes the score down. Only shown on the scripted mock for now.
+13. **Story problems (R-37).** Problem 2 is a story in your interest (the soccer team's points,
+   a player's coins, kit bags to pack: `src/content/stories.json`, five templates, numbers from the
+   seed) that comes to a two-step equation. First tap the equation that says the same thing, out of
+   three: the right one and two common slips (the sign the wrong way, the two numbers swapped).
+   Platy grades the choice by equivalence, so `28 = 3x + 7` typed into the chat counts too. A wrong
+   choice stays marked where it is and Platy asks about the story ("What changes each game?"),
+   never the equation (R-02); the hints before the choice are about the story too. Then the story
+   stays above the ladder and you solve the equation line by line as in item 1; the last line says
+   the count ("4 games"). **Switch interest** re-tells the story for the new team without touching
+   the numbers or your progress (R-38).
 
 The dashed **Demo** button in the header (mock only) jumps to any screen on cue: skip a problem, each of the
 three puzzles (spot the error, missing step, balance scale), the worked example, the pause screen, the
@@ -142,13 +154,14 @@ src/
     websocket.ts         the real transport: POST /sessions, then a WebSocket
     index.ts             picks mock unless VITE_PLATY_SERVER_URL is set
   mock/                  scripted lesson, answer, step and slip checking, and puzzle items, skins,
-                         problem generators and grading (all go away with the real backend)
+                         problem generators, story problems and grading (all go away with the real backend)
   content/               puzzle types, balance-scale moves, team-color palette, slip map, item
-                         catalog, and the words for the primer view, the map and the confidence check
+                         catalog, story templates, and the words for the primer view, the map and the
+                         confidence check
   math/                  child-math parser, LaTeX output, KaTeX rendering, keypad keys, and the
                          terms of each line for the step solver's motion
   session/               reducer + hook holding all session state in memory
-  components/            ProblemCard, StepSolver, ConfidenceCheck, PuzzlePlayer (+ puzzles/),
+  components/            ProblemCard, StepSolver, StoryCard, ConfidenceCheck, PuzzlePlayer (+ puzzles/),
                          MathInput, Chat, YourMap, PrimerPanel, Overlays, Mascot
 scripts/
   coverage.mjs           writes docs/content/coverage.md from the catalog (npm run coverage)
@@ -197,6 +210,22 @@ expression skill (integer arithmetic, order of operations) the lines are the wor
 x: a line is `valid` when it comes to the same value as the one above and `solved` when it is one
 number (`src/mock/steps.ts`), and a slip on one opens its repair and then a fresh problem to work
 out, the same way as on an equation.
+
+Story problems (R-37, proposed for Connor to accept) add `format: "story"` to `problem`, with
+`story {text, choices}`: the story in the student's interest and the equations to choose from, in
+the student's notation. The `prompt` is empty until the setup is right, so the card never holds
+the equation early. The client sends `setup {problem_id, text}` (a tapped choice or a typed
+equation) and the server answers `setup_result {problem_id, result}` with `correct`, `incorrect`
+or `unreadable`, graded by equivalence (any equation with the story's solution counts, except the
+solution itself). After a correct one the server sends the `problem` again with the equation as
+its prompt and the solving instruction, and the lines run as on a `steps` problem; a wrong one
+gets a hint about the story in the chat, never the equation (R-02), and three count as misses
+(R-21). The same `problem` sent again with a new `story` is a new skin (R-38): the browser keeps
+the setup or the lines. Templates live in `src/content/stories.json` (slots for the skin's team,
+player and units, two story hints, and the wrong setups with the question for each);
+`src/mock/stories.ts` draws the numbers, builds the choices and grades the setup, standing in for
+the server, which would do the same from the same file with `platy.mathcheck`. The real app
+should offer the typed setup as well as the three taps.
 
 Generated problems (R-41): `src/mock/generate.ts` makes problems for the five demo skills at three
 levels (1 small positive whole numbers, 2 negatives or bigger numbers, 3 a fraction or decimal

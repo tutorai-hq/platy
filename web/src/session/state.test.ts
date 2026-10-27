@@ -212,6 +212,80 @@ describe("session reducer", () => {
   });
 
   // R-42: the demo primer view. Codes and numbers only, kept across resets, gone with the session.
+  describe("story problems (R-37)", () => {
+    const story = {
+      text: "The Harbor Puffins have 7 points so far this season. They win 3 points a game. How many more games until they have 28 points?",
+      choices: ["3x + 7 = 28", "3x - 7 = 28", "7x + 3 = 28"],
+    };
+    const storyProblem: ServerEvent = {
+      type: "problem", problem_id: "st1", skill_id: "two_step_equations", prompt: "", instruction: "Which equation says the same as the story?",
+      format: "story", kind: "practice", position: 2, total: 6, story,
+    };
+    const withEquation: ServerEvent = { ...storyProblem, prompt: "3x + 7 = 28", instruction: "Solve it one line at a time" };
+    const at = () => reducer(live(), { type: "server", event: storyProblem });
+    const verdict = (s: SessionState, result: "correct" | "incorrect" | "unreadable", problem_id = "st1") =>
+      reducer(s, { type: "server", event: { type: "setup_result", problem_id, result } });
+
+    it("waits for the setup with no lines, and holds one equation at a time", () => {
+      const s = at();
+      expect(s.steps).toBeNull();
+      expect(s.setup).toEqual({ problem_id: "st1", pending: null, rejected: [] });
+      const t = reducer(s, { type: "setup_sent", text: "3x - 7 = 28" });
+      expect(t.setup?.pending).toBe("3x - 7 = 28");
+      expect(reducer(t, { type: "setup_sent", text: "3x + 7 = 28" }).setup?.pending).toBe("3x - 7 = 28");
+    });
+
+    it("marks a turned-down equation where it is; an unreadable one is only let go", () => {
+      let s = reducer(at(), { type: "setup_sent", text: "3x - 7 = 28" });
+      s = verdict(s, "incorrect");
+      expect(s.setup).toEqual({ problem_id: "st1", pending: null, rejected: ["3x - 7 = 28"] });
+      s = verdict(reducer(s, { type: "setup_sent", text: "hello" }), "unreadable");
+      expect(s.setup).toEqual({ problem_id: "st1", pending: null, rejected: ["3x - 7 = 28"] });
+      // Only the verdict on the equation that's out counts.
+      expect(verdict(s, "incorrect")).toBe(s);
+      const t = reducer(s, { type: "setup_sent", text: "7x + 3 = 28" });
+      expect(verdict(t, "incorrect", "s2")).toBe(t);
+    });
+
+    it("starts the lines when the story comes again with its equation, and keeps the story", () => {
+      let s = verdict(reducer(at(), { type: "setup_sent", text: "28 = 3x + 7" }), "correct");
+      expect(s.setup).toEqual({ problem_id: "st1", pending: null, rejected: [] });
+      s = reducer(s, { type: "server", event: withEquation });
+      expect(s.setup).toBeNull();
+      expect(s.steps).toEqual({ problem_id: "st1", lines: [], pending: null, marked: null, solved: false });
+      expect(s.problem).toMatchObject({ prompt: "3x + 7 = 28", instruction: "Solve it one line at a time", story });
+      // Then the lines, as on any step-by-step problem.
+      s = reducer(s, { type: "step_sent", text: "3x = 21" });
+      s = reducer(s, { type: "server", event: { type: "step_result", problem_id: "st1", line: 1, result: "valid" } });
+      expect(s.steps?.lines).toEqual(["3x = 21"]);
+    });
+
+    it("takes the same story again as a new skin, keeping the setup or the lines (R-38)", () => {
+      const reskinned = { ...story, text: "The Canyon Meteors have 7 points so far this season. They win 3 points a game. How many more games until they have 28 points?" };
+      let s = verdict(reducer(at(), { type: "setup_sent", text: "3x - 7 = 28" }), "incorrect");
+      s = reducer(s, { type: "server", event: { ...storyProblem, story: reskinned } });
+      expect(s.setup).toEqual({ problem_id: "st1", pending: null, rejected: ["3x - 7 = 28"] });
+      expect(s.problem?.story).toEqual(reskinned);
+      s = reducer(s, { type: "server", event: withEquation });
+      s = reducer(s, { type: "step_sent", text: "3x = 21" });
+      s = reducer(s, { type: "server", event: { type: "step_result", problem_id: "st1", line: 1, result: "valid" } });
+      s = reducer(s, { type: "server", event: { ...withEquation, story } });
+      expect(s.steps?.lines).toEqual(["3x = 21"]);
+      expect(s.problem).toMatchObject({ prompt: "3x + 7 = 28", story });
+    });
+
+    it("goes straight to the lines when a story arrives with its equation, as after a detour", () => {
+      const s = reducer(live(), { type: "server", event: withEquation });
+      expect(s.setup).toBeNull();
+      expect(s.steps?.problem_id).toBe("st1");
+    });
+
+    it("drops the setup on a reset, and keeps it from a plain problem", () => {
+      expect(reducer(at(), { type: "server", event: { type: "reset", reason: "problem_end" } }).setup).toBeNull();
+      expect(reducer(live(), { type: "server", event: { ...storyProblem, format: "answer", story: undefined } }).setup).toBeNull();
+    });
+  });
+
   describe("primer view (R-42)", () => {
     const primer = (code: string, reason: string, p = 0.4): ServerEvent => ({
       type: "primer_state",

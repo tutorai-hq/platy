@@ -2,20 +2,22 @@ import { describe, expect, it } from "vitest";
 import type { PuzzleMove } from "../content/types";
 import type { ClientEvent, PrimerState, ServerEvent } from "../protocol";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
-import { CATALOG, descriptorFor, skillOf } from "../content/catalog";
+import { CATALOG, descriptorFor, PROBE_EQUATIONS, skillOf } from "../content/catalog";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { answerExample } from "../mock/answers";
 import { REASON_CODES, STEP_CODES } from "../content/confidence";
 import { bareNumber } from "../mock/grade";
+import { SKINS } from "../mock/puzzles";
+import { storyLine, storyText, templateOf as storyTemplateOf } from "../mock/stories";
 import {
   CLOSING, CONFIDENCE_ASK, CONFIDENCE_ASK_LATE, CONFIDENCE_CHAT, CONFIDENCE_REPLIES, confirmProblem, EXPLAIN_FIRST, KEY_STEP_ASK,
-  KEY_STEP_REPLIES, KEY_STEP_REPLY_NONE, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD,
-  STEP_UNREADABLE_VALUE, SWITCH_ANGLE,
+  KEY_STEP_REPLIES, KEY_STEP_REPLY_NONE, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, OUT_OF_HINTS, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD,
+  STEP_UNREADABLE_VALUE, STORY_INSTRUCTION, STORY_INTRO, STORY_SETUP_OTHER, STORY_SETUP_UNREADABLE, STORY_SOLVE, SWITCH_ANGLE,
 } from "../mock/script";
 import { pickTeachItem } from "../mock/teach";
 import { firstWrong, workOut } from "../mock/working";
-import { type MockTiming, MockTransport } from "./mock";
+import { defaultLesson, type MockTiming, MockTransport } from "./mock";
 
 const FAST: MockTiming = { thinkMs: 0, wordMs: 0, resetMs: 0 };
 
@@ -756,6 +758,143 @@ describe("MockTransport", () => {
   // expressions worked out a line at a time, so a step problem on one routes a slip to its repair
   // and then confirms the fix on a fresh problem to work out (R-41). The demo lesson has no such
   // problem yet, so these run on a one-problem lesson.
+  describe("story problems (R-37)", () => {
+    // The demo lesson: s1, the story, then s2. The tests start once s1 is solved and the story is up.
+    const lesson = defaultLesson(20261018);
+    const st = lesson[1]!;
+    const story = st.story!;
+    const skin = SKINS.soccer;
+    const wrong = story.choices.find((c) => c !== story.equation)!;
+    const shown = (h: ReturnType<typeof harness>) => {
+      const p = h.events.filter((e) => e.type === "problem").at(-1);
+      if (p?.type !== "problem") throw new Error("expected a problem");
+      return p;
+    };
+    const setups = (h: ReturnType<typeof harness>, from = 0) => h.events.slice(from).flatMap((e) => (e.type === "setup_result" ? [e.result] : []));
+    const lastMove = (h: ReturnType<typeof harness>) => h.events.flatMap((e) => (e.type === "primer_state" ? [e.move] : [])).at(-1);
+    const atStory = async () => {
+      const h = harness(lesson);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
+      await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 6" });
+      expect(h.problems()).toEqual(["s1", "st1"]);
+      return Object.assign(h, { from: h.events.length });
+    };
+
+    it("puts one story in the demo lesson after the first problem, in the student's interest, with no equation yet", async () => {
+      expect(lesson.map((p) => p.problem_id)).toEqual(["s1", "st1", "s2", "p1", "p2", "p3"]);
+      expect(st).toMatchObject({ format: "story", skill_id: "two_step_equations" });
+      const h = await atStory();
+      const p = shown(h);
+      expect(p).toMatchObject({ problem_id: "st1", format: "story", prompt: "", instruction: STORY_INSTRUCTION, kind: "practice", position: 2, total: 6 });
+      expect(p.story).toEqual({ text: storyText(story, skin), choices: story.choices });
+      expect([skin.team_name, skin.player_names[0]!].some((name) => p.story!.text.includes(name))).toBe(true);
+      expect(h.said().at(-1)).toBe(STORY_INTRO);
+      // Lines and answers wait for the setup.
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "st1", line: 1, text: `x = ${story.answer}` });
+      await h.send({ type: "answer", problem_id: "st1", text: String(story.answer) });
+      expect(h.events.length).toBe(mark);
+    });
+
+    it("turns a wrong setup down with a question about the story, never the equation (R-02)", async () => {
+      const h = await atStory();
+      await h.send({ type: "setup", problem_id: "st1", text: wrong });
+      expect(setups(h, h.from)).toEqual(["incorrect"]);
+      expect(h.said(h.from)).toEqual([storyLine(story, skin, story.slipHints[wrong]!)]);
+      expect(h.said(h.from).join(" ")).not.toContain("=");
+      expect(lastMove(h)).toMatchObject({ code: "mark_line", reason: "story_setup_wrong", skill_id: "two_step_equations" });
+      expect(shown(h).prompt).toBe("");
+      // The same wrong setup written another way gets the same question.
+      let mark = h.events.length;
+      const [lhs, rhs] = wrong.split(" = ") as [string, string];
+      await h.send({ type: "setup", problem_id: "st1", text: `${rhs} = ${lhs}` });
+      expect(setups(h, mark)).toEqual(["incorrect"]);
+      expect(h.said(mark)).toEqual([storyLine(story, skin, story.slipHints[wrong]!)]);
+      // Something that isn't an equation is said so, and isn't a miss.
+      mark = h.events.length;
+      await h.send({ type: "setup", problem_id: "st1", text: "the team wins" });
+      expect(setups(h, mark)).toEqual(["unreadable"]);
+      expect(h.said(mark)).toEqual([STORY_SETUP_UNREADABLE]);
+      expect(h.events.some((e) => e.type === "pause_suggested")).toBe(false);
+    });
+
+    it("asks the plain question for a wrong setup that matches no known slip", async () => {
+      const h = await atStory();
+      await h.send({ type: "setup", problem_id: "st1", text: `${story.a}x + ${story.b + 1} = ${story.c}` });
+      expect(setups(h, h.from)).toEqual(["incorrect"]);
+      expect(h.said(h.from)).toEqual([STORY_SETUP_OTHER]);
+    });
+
+    it("takes the right setup however it's written, sends the equation, then solves it in lines", async () => {
+      const h = await atStory();
+      const { a, b, c, answer } = story;
+      const [lhs] = story.equation.split(" = ") as [string, string];
+      await h.send({ type: "setup", problem_id: "st1", text: `${c} = ${lhs}` });
+      expect(setups(h, h.from)).toEqual(["correct"]);
+      expect(shown(h)).toMatchObject({ problem_id: "st1", format: "story", prompt: story.equation, instruction: st.instruction, position: 2 });
+      expect(shown(h).story?.text).toBe(storyText(story, skin));
+      expect(h.said(h.from)).toEqual([STORY_SOLVE]);
+      expect(lastMove(h)).toMatchObject({ code: "accept_line", reason: "story_setup_right" });
+      // A second setup is ignored now; the lines are the way on.
+      const mark = h.events.length;
+      await h.send({ type: "setup", problem_id: "st1", text: wrong });
+      expect(h.events.length).toBe(mark);
+      await h.send({ type: "step", problem_id: "st1", line: 1, text: `${a}x = ${story.equation.includes(" - ") ? c + b : c - b}` });
+      await h.send({ type: "step", problem_id: "st1", line: 2, text: `x = ${answer}` });
+      expect(h.events.slice(mark).flatMap((e) => (e.type === "step_result" ? [e.result] : []))).toEqual(["valid", "solved"]);
+      expect(h.said(mark).join(" ")).toContain(`${answer} ${storyTemplateOf(story).unknown}`);
+      expect(h.problems()).toEqual(["s1", "st1", "st1", "s2"]);
+    });
+
+    it("takes an equation typed into the chat as the setup", async () => {
+      const h = await atStory();
+      await h.send({ type: "child_message", text: story.equation });
+      expect(setups(h, h.from)).toEqual(["correct"]);
+      expect(shown(h).prompt).toBe(story.equation);
+    });
+
+    it("hints about the story before the setup, and about the lines after", async () => {
+      const h = await atStory();
+      for (let i = 0; i < 3; i++) await h.send({ type: "hint_requested", problem_id: "st1" });
+      expect(h.said(h.from)).toEqual([...storyTemplateOf(story).hints.map((x) => storyLine(story, skin, x)), OUT_OF_HINTS]);
+      expect(h.said(h.from).join(" ")).not.toContain("=");
+      await h.send({ type: "setup", problem_id: "st1", text: story.equation });
+      const mark = h.events.length;
+      await h.send({ type: "hint_requested", problem_id: "st1" });
+      expect(h.said(mark)).toEqual([st.hints[0]]);
+    });
+
+    it("changes the story's words with the interest, and keeps the equation and the progress (R-38)", async () => {
+      const h = await atStory();
+      await h.send({ type: "setup", problem_id: "st1", text: wrong });
+      h.t.demo("interest");
+      await h.settle();
+      const p = shown(h);
+      expect(p).toMatchObject({ problem_id: "st1", prompt: "", story: { text: storyText(story, SKINS.football), choices: story.choices } });
+      expect(p.story?.text).not.toBe(storyText(story, skin));
+      await h.send({ type: "setup", problem_id: "st1", text: story.equation });
+      h.t.demo("interest");
+      await h.settle();
+      expect(shown(h)).toMatchObject({ problem_id: "st1", prompt: story.equation, story: { text: storyText(story, SKINS.gaming), choices: story.choices } });
+    });
+
+    it("suggests a pause after three wrong setups (R-21)", async () => {
+      const h = await atStory();
+      for (let i = 0; i < 3; i++) await h.send({ type: "setup", problem_id: "st1", text: wrong });
+      expect(h.events.some((e) => e.type === "pause_suggested")).toBe(true);
+    });
+
+    it("never gives a story an equation a probe or another lesson problem uses (R-01, R-02)", () => {
+      for (const seed of Array.from({ length: 25 }, (_, i) => i + 1)) {
+        const l = defaultLesson(seed);
+        const s = l[1]!;
+        expect(s.format).toBe("story");
+        expect(isOneOf(s.prompt, [...PROBE_EQUATIONS, ...l.filter((p) => p !== s).map((p) => p.prompt)]), `${seed}: ${s.prompt}`).toBe(false);
+      }
+    });
+  });
+
   describe("expression repairs (R-37, R-40)", () => {
     const lessonOn = (node: "integer_arithmetic" | "order_of_operations", prompt: string, answer: number) =>
       [confirmProblem("e1", node, prompt, answer, String(answer))];

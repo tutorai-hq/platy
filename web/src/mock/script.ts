@@ -3,6 +3,7 @@
 // short replies with one idea each (R-06), and a pivot when a child keeps missing (R-21).
 // Everything here is fake content; no real child data is involved (P-13).
 
+import type { StoryInstance } from "./stories";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import type { PuzzleTemplate } from "../content/types";
 import type { SafetyResource } from "../protocol";
@@ -12,8 +13,10 @@ export interface ScriptedProblem {
   skill_id: string;
   prompt: string;
   instruction: string;
-  /** "steps": solved one checked line at a time (R-48). Answer box otherwise. */
-  format?: "steps";
+  /** "steps": solved one checked line at a time (R-48). "story": the setup first, then steps (R-37). Answer box otherwise. */
+  format?: "steps" | "story";
+  /** A story problem's numbers and setups; its words come from the template and the skin at show time. */
+  story?: StoryInstance;
   /** The letter the answer is for: x when absent, null for a value to work out (R-18). */
   variable?: string | null;
   solutions: number[];
@@ -218,6 +221,13 @@ export const BACK_TO_IT = "Now back to the one from before.";
 // problem of the same kind to check the fix stuck (R-41), in place of the one they slipped on.
 export const STEP_REPAIR_LEAD = "I think I know what happened on that line. Let's try that one move in a quick puzzle first.";
 export const ONE_MORE = "Now a new one, to check the fix holds. Same kind of problem, new numbers.";
+
+// Story problems (R-37): the setup first, then the lines.
+export const STORY_INTRO = "This one's a story. First tap the equation that says the same thing, then solve it.";
+export const STORY_INSTRUCTION = "Which equation says the same as the story?";
+export const STORY_SOLVE = "That's the one. Now solve it, one line at a time.";
+export const STORY_SETUP_OTHER = "Not that one. Read the story once more: what happens every time, and what happens once?";
+export const STORY_SETUP_UNREADABLE = "I couldn't read that as an equation. Tap one of the three.";
 
 /** A generated problem (R-41) as a step-by-step problem, with lines that fit any numbers. */
 export function confirmProblem(problem_id: string, skill_id: string, prompt: string, solution: number, answerText: string): ScriptedProblem {

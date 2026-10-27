@@ -32,6 +32,8 @@
     "solved": "Solved, every line valid. Evidence for {skill}.",
     "answer_right": "Right answer. Evidence for {skill}.",
     "answer_wrong": "Wrong answer. Evidence against {skill}.",
+    "story_setup_right": "The right equation for the story. Evidence for {skill}.",
+    "story_setup_wrong": "The wrong equation for the story. Evidence against {skill}.",
     "three_misses": "Three misses on one {skill} problem. Suggesting a pause.",
     "confidence": "An easier {skill} problem, to rebuild confidence.",
     "calibrate": "Asking how sure before confirming the {skill} answer, to compare confidence with the result.",

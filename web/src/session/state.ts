@@ -52,6 +52,19 @@ export interface StepsState {
   solved: boolean;
 }
 
+/**
+ * A story problem's first part (R-37): choosing or writing the equation that says the story. The
+ * server grades it by equivalence; the browser only marks what it turned down. Gone once the
+ * setup is right and the problem comes again with its equation, when `steps` takes over.
+ */
+export interface SetupState {
+  problem_id: string;
+  /** The equation waiting for the server's verdict. */
+  pending: string | null;
+  /** Equations the server turned down, kept marked on the card. */
+  rejected: string[];
+}
+
 /** A confidence check waiting on the card (R-30): codes from the server, words from the table. */
 export interface ConfidenceCheck {
   problem_id: string;
@@ -77,6 +90,8 @@ export interface SessionState {
   feedback: AnswerFeedback;
   /** Set while a step-by-step problem is on screen. */
   steps: StepsState | null;
+  /** Set while a story problem waits for its equation (R-37). */
+  setup: SetupState | null;
   /** Shown briefly when a hard reset clears the page. */
   resetNote: string | null;
   overlay: Overlay;
@@ -124,6 +139,7 @@ export const initialState: SessionState = {
   puzzle: null,
   feedback: null,
   steps: null,
+  setup: null,
   resetNote: null,
   overlay: null,
   moving: false,
@@ -145,6 +161,8 @@ export type Action =
   /** The student answered the confidence check (R-30); `level` is null on a key_step beat. */
   | { type: "confidence_sent"; level: 1 | 2 | 3 | null }
   | { type: "step_sent"; text: string }
+  /** The student picked or wrote an equation for a story problem (R-37). */
+  | { type: "setup_sent"; text: string }
   | { type: "puzzle_move_sent"; move: PuzzleMove }
   | { type: "puzzle_next_sent" }
   | { type: "continue_sent" }
@@ -186,6 +204,9 @@ export function reducer(state: SessionState, action: Action): SessionState {
     case "step_sent":
       if (!state.steps || state.steps.pending !== null || state.steps.solved) return state;
       return { ...state, steps: { ...state.steps, pending: action.text, marked: null } };
+    case "setup_sent":
+      if (!state.setup || state.setup.pending !== null) return state;
+      return { ...state, setup: { ...state.setup, pending: action.text } };
     case "puzzle_move_sent": {
       const p = state.puzzle;
       if (!p) return state;
@@ -223,10 +244,24 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
     }
     case "problem": {
       const { type: _type, ...problem } = event;
-      const steps = problem.format === "steps"
-        ? { problem_id: problem.problem_id, lines: [], pending: null, marked: null, solved: false }
-        : null;
-      return { ...state, problem, feedback: null, steps, moving: false, nextUp: null, confidence: null };
+      const shown = state.problem;
+      const same = problem.format === "story" && shown !== null && shown.problem_id === problem.problem_id;
+      // The same story again with no equation yet, or while it's being solved, is a new skin (R-38).
+      if (same && (problem.prompt === "" || state.steps !== null)) return { ...state, problem: { ...shown, story: problem.story } };
+      // A story is solved in steps once its equation is there (R-37); until then it waits for the setup.
+      const solving = problem.format === "steps" || (problem.format === "story" && problem.prompt !== "");
+      const steps = solving ? { problem_id: problem.problem_id, lines: [], pending: null, marked: null, solved: false } : null;
+      const setup = problem.format === "story" && !solving ? { problem_id: problem.problem_id, pending: null, rejected: [] } : null;
+      // The same story with its equation: the setup was right, and the lines begin.
+      if (same) return { ...state, problem, steps, setup };
+      return { ...state, problem, feedback: null, steps, setup, moving: false, nextUp: null, confidence: null };
+    }
+    case "setup_result": {
+      const s = state.setup;
+      if (!s || s.problem_id !== event.problem_id || s.pending === null) return state;
+      // A wrong equation stays marked; the hint about it is the tutor's, in the chat (R-02).
+      const rejected = event.result === "incorrect" ? [...s.rejected, s.pending] : s.rejected;
+      return { ...state, setup: { ...s, pending: null, rejected } };
     }
     case "confidence_check": {
       // The check sits on the card of the problem it's about, so it needs that card on screen.
@@ -263,6 +298,7 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
         messages: [],
         problem: null,
         steps: null,
+        setup: null,
         puzzle: null,
         feedback: null,
         moving: true,

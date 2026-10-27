@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { DEMO_NODES, isOneOf, type Level, LEVELS, seeded } from "../mock/generate";
 import { INTERESTS, ITEMS, newItemPuzzle, newPuzzle, problemOf, REPAIRS, SKINS, TEACH, toWire, WORKED_FADES } from "../mock/puzzles";
+import { STORIES, storyItemId } from "../mock/stories";
 import { sameExpression } from "../mock/working";
 import raw from "./catalog.json";
 import {
@@ -101,7 +102,7 @@ describe("item catalog (R-37)", () => {
   });
 
   it("has exactly one descriptor for every item the mock runs, and no descriptor without an item", () => {
-    const mockIds = new Set([...Object.values(ITEMS), ...Object.values(REPAIRS), ...Object.values(TEACH), ...WORKED_FADES].map((i) => i.item_id));
+    const mockIds = new Set([...[...Object.values(ITEMS), ...Object.values(REPAIRS), ...Object.values(TEACH), ...WORKED_FADES].map((i) => i.item_id), ...STORIES.map((t) => storyItemId(t.id))]);
     expect([...mockIds].sort()).toEqual(CATALOG.map((d) => d.id).sort());
     // The three fades of the worked example are one item.
     expect(WORKED_FADES.map((i) => i.item_id)).toEqual(["lin2-worked-example", "lin2-worked-example", "lin2-worked-example"]);

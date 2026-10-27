@@ -528,3 +528,27 @@ button, input { font: inherit; color: inherit; }
 .test__skills th { text-align: left; font-weight: 400; color: var(--ink); }
 .test__skills td { text-align: right; font-weight: 700; white-space: nowrap; }
 .test__note { font-size: 0.85rem; }
+
+/* Story problems (R-37). The story is the problem, so it gets the problem row's wash and a rule, and
+   reads like a page: larger, roomy lines, under 60 characters wide. The equations are the choices,
+   set in math size with the ladder's mark on one the server turned down. Above the ladder, once the
+   equation is chosen, the story stays in view, quiet. */
+.story__text {
+  margin: 0; font-size: 1.2rem; line-height: 1.55; max-width: 32em;
+  padding: 16px 20px; border-radius: 12px; background: var(--river-wash); box-shadow: inset 4px 0 0 var(--river);
+}
+.story__text--quiet { font-size: 1rem; line-height: 1.5; color: var(--ink-soft); background: transparent; box-shadow: inset 3px 0 0 var(--line); padding: 4px 16px; }
+.story__choices { display: grid; gap: 10px; }
+.story__choice {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; min-height: 56px; padding: 10px 16px;
+  border-radius: 12px; border: 2px solid var(--line); background: var(--card); color: var(--ink);
+  font: inherit; font-size: 1.3rem; text-align: left; cursor: pointer;
+}
+.story__choice[aria-disabled="true"] { cursor: default; }
+@media (hover: hover) {
+  .story__choice:not([aria-disabled="true"]):hover { border-color: var(--river); background: var(--river-wash); }
+}
+.story__choice--rejected { border-color: var(--warm); background: var(--warm-wash); }
+.story__choice--pending { opacity: 0.6; }
+.story__mark { color: var(--warm); font-weight: 700; min-width: 1em; text-align: center; }
+.story__why { min-height: 1.5em; margin: 0; color: var(--warm); font-weight: 700; }

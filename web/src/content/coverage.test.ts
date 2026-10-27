@@ -45,7 +45,9 @@ describe("content coverage grid (R-37)", () => {
   it("lists the demo path's gaps first, in map order, then slips with no repair, then skills with one angle", () => {
     expect(grid.demoGaps.map((g) => g.node)).toEqual(skillMap.nodes.map((n) => n.id).filter((id) => (DEMO_NODES as readonly string[]).includes(id)));
     for (const g of grid.demoGaps) expect(g.roles).toEqual(ROLES.filter((r) => isEmpty(cell(g.node, r))));
-    expect(grid.demoGaps.find((g) => g.node === "two_step_equations")!.roles).toEqual(["review", "apply", "hook"]);
+    // The story problems fill two-step equations' apply cell (R-37).
+    expect(grid.demoGaps.find((g) => g.node === "two_step_equations")!.roles).toEqual(["review", "hook"]);
+    expect(cell("two_step_equations", "apply").items).toEqual(["story-given-away", "story-packing-bags", "story-points-a-game", "story-saving-up", "story-season-penalty"]);
     expect(grid.slipsWithoutRepair).toEqual([]);
     // R-05: every demo skill has two angles now; a catalog with one would be listed here.
     expect(grid.oneAngle).toEqual([]);

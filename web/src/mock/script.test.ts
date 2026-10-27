@@ -3,6 +3,7 @@ import confidence from "../content/confidence.json";
 import words from "../content/map.json";
 import * as puzzles from "./puzzles";
 import * as script from "./script";
+import { STORIES } from "./stories";
 
 // Teen test 2026-10-26 (R-06): the fixed lines are what the demo shows, and testers stumbled on
 // long ones and on idioms ("Fresh page", "You've got this"). Every tutor line is at most two
@@ -38,6 +39,8 @@ collect(script.confirmProblem("g2", "order_of_operations", "20 - 3*(4 + 2)", 2, 
 collect(script.probeProblem("one_step_equations"), "probeProblem", LINES);
 for (const name of ["ITEMS", "WORKED_FADES", "WALKTHROUGH", "REPAIRS", "TEACH"] as const) collect(puzzles[name], name, LINES);
 collect(words.encouragement, "map.encouragement", LINES);
+// Story hints and the asks for a wrong setup are tutor lines; the story text itself is the problem, not a reply.
+for (const t of STORIES) collect({ hints: t.hints, slips: t.slips.map((x) => x.hint) }, `stories.${t.id}`, LINES);
 // R-30: the confidence check's taps, asks and the map's calibration lines are child-facing too.
 collect(confidence, "confidence", LINES);
 

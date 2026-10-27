@@ -24,6 +24,8 @@ interface Props {
   /** The confidence check on this card (R-30): it takes the place of the line box. */
   confidence?: Check | null;
   onConfidence?: (problemId: string, level: Level | null, reason: string | null) => void;
+  /** A story problem's words (R-37), kept in view while its equation is solved. */
+  story?: string | null;
 }
 
 const MARKS = {
@@ -47,7 +49,7 @@ const EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
 
 // Step-by-step solving (R-48): the student writes one line at a time under the problem. Each
 // line is checked before the next one opens, and a wrong line is marked where it is.
-export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext, confidence = null, onConfidence }: Props) {
+export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext, confidence = null, onConfidence, story = null }: Props) {
   const rows = [problem.prompt, ...steps.lines];
   const check = confidence?.problem_id === problem.problem_id ? confidence : null;
   const card = useRef<HTMLElement>(null);
@@ -75,6 +77,7 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext, con
       aria-labelledby="problem-heading"
     >
       <p className="problem__count">{problemLabel(problem)}</p>
+      {story !== null && <p className="story__text story__text--quiet">{story}</p>}
       <h2 id="problem-heading" className="problem__instruction">
         {problem.instruction}
       </h2>

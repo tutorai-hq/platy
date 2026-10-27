@@ -7,6 +7,7 @@ import { PrimerPanel } from "./components/PrimerPanel";
 import { ProblemCard } from "./components/ProblemCard";
 import { PuzzlePlayer } from "./components/PuzzlePlayer";
 import { StepSolver } from "./components/StepSolver";
+import { StoryCard } from "./components/StoryCard";
 import { TestRunner } from "./components/TestRunner";
 import { YourMap } from "./components/YourMap";
 import { latestTutorLine, TutorLine } from "./session/tutorLine";
@@ -104,11 +105,14 @@ export function App() {
                     onNext={s.puzzleNext}
                     onColors={s.pickColors}
                   />
+                ) : s.state.problem && s.state.setup?.problem_id === s.state.problem.problem_id ? (
+                  <StoryCard key={s.state.problem.problem_id} problem={s.state.problem} setup={s.state.setup} onSetup={s.setup} onHint={s.hint} />
                 ) : s.state.problem && s.state.steps?.problem_id === s.state.problem.problem_id ? (
                   <StepSolver
                     key={s.state.problem.problem_id}
                     problem={s.state.problem}
                     steps={s.state.steps}
+                    story={s.state.problem.story?.text ?? null}
                     onStep={s.step}
                     onHint={s.hint}
                     nextUp={s.state.nextUp}
@@ -136,7 +140,8 @@ export function App() {
                   hold={
                     s.state.moving ||
                     (s.state.puzzle !== null && s.state.puzzle.pending !== null) ||
-                    (s.state.steps !== null && s.state.steps.pending !== null)
+                    (s.state.steps !== null && s.state.steps.pending !== null) ||
+                    (s.state.setup !== null && s.state.setup.pending !== null)
                   }
                   inputRef={chatInput}
                   onSay={s.say}

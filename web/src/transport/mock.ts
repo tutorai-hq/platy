@@ -8,6 +8,8 @@ import { clashes, DEMO_NODES, type DemoNode, type Level, problemSession, seeded 
 import { MockPrimer, PROBE_BELOW } from "../mock/primer";
 import { detectSlip } from "../mock/slips";
 import { checkStep } from "../mock/steps";
+import { readable } from "../mock/grade";
+import { gradeSetup, newStory, slipHintFor, STORIES, storyLine, storyProblem, storyText, templateOf as storyTemplateOf } from "../mock/stories";
 import {
   type Fade, gradeMove, INTERESTS, type Interest, itemFor, type LivePuzzle, line, newItemPuzzle, newPuzzle, nextHint, problemOf,
   skinFor, toWire, worksOut,
@@ -16,7 +18,7 @@ import {
   BACK_TO_IT, CLOSING, CONFIDENCE_ASK, CONFIDENCE_ASK_LATE, CONFIDENCE_CHAT, CONFIDENCE_REPLIES, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, KEY_STEP_ASK, KEY_STEP_CHAT, KEY_STEP_REPLIES, KEY_STEP_REPLY_NONE, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OFF_TOPIC, OPENING,
   OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
   PUZZLE_UNREADABLE, PUZZLE_UNREADABLE_VALUE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SEE_MAP, SHOW_ONE, STEP_IN_LINES,
-  STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, STEP_UNREADABLE_VALUE, SWITCH_ANGLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
+  STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, STEP_UNREADABLE_VALUE, STORY_INSTRUCTION, STORY_SETUP_OTHER, STORY_SETUP_UNREADABLE, STORY_SOLVE, SWITCH_ANGLE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
 } from "../mock/script";
 import type { ClientEvent, ServerEvent, SessionMode } from "../protocol";
 import type { DemoTrigger, TutorTransport } from "./types";
@@ -41,6 +43,19 @@ const WANTS_ANSWER = /\b(gimme|give me|tell me|what'?s|whats)\b.*\banswer\b|\ban
 const MATHY = /\d|[=+\-*/^×÷]|\b(add|subtract|minus|plus|times|divide|multiply|sides?|undo|move|equation|solve|step|number|answer|x|first|then|get)\b/i;
 
 export const DEMO_TIMING: MockTiming = { thinkMs: 550, wordMs: 35, resetMs: 700, wait: true };
+
+/**
+ * The demo lesson: the two step-by-step problems with a story problem between them (R-37, the
+ * "apply" role, after the fresh problem on the demo arc), then the answer-box problems. The story's
+ * template and numbers come from the seed, so the demo is the same each run.
+ */
+export function defaultLesson(seed: number): ScriptedProblem[] {
+  const rng = seeded(seed + 7);
+  const avoid = [...STEP_LESSON, ...LESSON].map((p) => p.prompt);
+  const template = STORIES[Math.floor(rng() * STORIES.length)]!;
+  const story = storyProblem("st1", newStory(template, 1, rng, avoid));
+  return [STEP_LESSON[0]!, story, ...STEP_LESSON.slice(1), ...LESSON];
+}
 
 // Plays the role of Platy's server, in the browser, from a fixed script. Nothing the child
 // types is stored: it is read once to pick the scripted reply and then dropped (P-1). The one
@@ -73,6 +88,8 @@ export class MockTransport implements TutorTransport {
   private nudge = 0;
   /** The accepted lines of a step-by-step problem (R-48), dropped with the problem. */
   private stepLines: string[] = [];
+  /** The current story problem's equation is chosen (R-37), so it's solved in lines now. */
+  private setupDone = false;
 
   // Puzzles (R-37). While one runs, `current` is null and `returnTo` holds the problem to go
   // back to. The skin's interest and the child's color pick last for the session (R-38).
@@ -125,7 +142,7 @@ export class MockTransport implements TutorTransport {
   constructor(
     private readonly timing: MockTiming = DEMO_TIMING,
     private readonly seed = 20261018,
-    lesson: ScriptedProblem[] = [...STEP_LESSON, ...LESSON],
+    lesson: ScriptedProblem[] = defaultLesson(seed),
   ) {
     this.order = [...lesson];
     this.problems = problemSession(seed);
@@ -212,12 +229,17 @@ export class MockTransport implements TutorTransport {
         return;
       case "answer":
         if (this.next || this.beat) return;
-        // A step-by-step problem is solved in lines; the answer alone never counts (R-48).
-        if (p && event.problem_id === p.problem_id && p.format !== "steps") await this.answer(p, event.text);
+        // A step-by-step problem is solved in lines; the answer alone never counts (R-48). A story
+        // has no answer box at all: its equation first, then lines (R-37).
+        if (p && event.problem_id === p.problem_id && p.format === undefined) await this.answer(p, event.text);
         return;
       case "step":
         if (this.next || this.beat) return;
-        if (p?.format === "steps" && event.problem_id === p.problem_id) await this.step(p, event.line, event.text);
+        if (p && this.inSteps(p) && event.problem_id === p.problem_id) await this.step(p, event.line, event.text);
+        return;
+      case "setup":
+        if (this.next || this.beat) return;
+        if (p?.story && !this.setupDone && event.problem_id === p.problem_id) await this.setup(p, event.text);
         return;
       case "child_message":
         // During the beat, what they say stays theirs (memory only); the tap is what moves on.
@@ -253,10 +275,13 @@ export class MockTransport implements TutorTransport {
       await this.say(NO_ANSWERS);
     } else if (/\b(idk|i don'?t know|stuck|confused|hint|help)\b/i.test(text)) {
       await this.hint(p);
+    } else if (p.story && !this.setupDone && readable(text)) {
+      // An equation typed into the chat for a story is its setup, written rather than picked (R-37).
+      await this.setup(p, text);
     } else if (readAnswer(text)) {
       // A child who types the answer into the chat gets it checked, not redirected. On a
       // step-by-step problem it belongs in the next line instead (R-48).
-      if (p.format === "steps") await this.say(STEP_IN_LINES);
+      if (this.inSteps(p)) await this.say(STEP_IN_LINES);
       else await this.answer(p, text);
     } else if (!MATHY.test(text) && !this.redirected) {
       // Off topic: one warm redirect, then the plain nudges (the real tutor's rule is R-39's).
@@ -267,8 +292,10 @@ export class MockTransport implements TutorTransport {
     }
   }
 
+  /** A story's hints before its equation is chosen are about the story, never the equation (R-02). */
   private async hint(p: ScriptedProblem): Promise<void> {
-    const hint = p.hints[this.hintsUsed];
+    const hints: readonly string[] = p.story && !this.setupDone ? storyTemplateOf(p.story).hints.map((h) => storyLine(p.story!, this.skin(), h)) : p.hints;
+    const hint = hints[this.hintsUsed];
     if (hint === undefined) {
       await this.say(OUT_OF_HINTS);
       return;
@@ -331,6 +358,41 @@ export class MockTransport implements TutorTransport {
     } else {
       await this.say(p.secondMiss);
     }
+  }
+
+  /** Solved one checked line at a time: a step problem, or a story once its equation is chosen (R-48, R-37). */
+  private inSteps(p: ScriptedProblem): boolean {
+    return p.format === "steps" || (p.format === "story" && this.setupDone);
+  }
+
+  /**
+   * The student's equation for a story (R-37), graded by equivalence. Right: the problem comes
+   * again with the equation, and the lines begin. Wrong: a question about the story, never the
+   * equation (R-02); a known wrong setup gets its own question.
+   */
+  private async setup(p: ScriptedProblem, text: string): Promise<void> {
+    const story = p.story!;
+    const result = gradeSetup(text, story);
+    this.out({ type: "setup_result", problem_id: p.problem_id, result });
+    if (result === "unreadable") {
+      await this.say(STORY_SETUP_UNREADABLE);
+      return;
+    }
+    this.primer.observe(p.skill_id, result === "correct");
+    this.think(result === "correct" ? "accept_line" : "mark_line", result === "correct" ? "story_setup_right" : "story_setup_wrong", p.skill_id);
+    if (result === "correct") {
+      this.setupDone = true;
+      this.hintsUsed = 0; // the solving hints start over
+      this.awaitingWhy = false;
+      this.out(this.problemEvent(p));
+      await this.say(STORY_SOLVE);
+      return;
+    }
+    this.misses++;
+    const slip = slipHintFor(text, story);
+    if (this.misses >= 3 && !this.pivoted) await this.suggestPause(); // R-21, as for a problem's answers
+    else if (slip) await this.say(storyLine(story, this.skin(), slip));
+    else await this.say(STORY_SETUP_OTHER);
   }
 
   private async step(p: ScriptedProblem, line: number, text: string): Promise<void> {
@@ -490,24 +552,38 @@ export class MockTransport implements TutorTransport {
     this.redirected = false;
     this.hintsUsed = 0;
     this.awaitingWhy = false;
+    // Back on a story after a detour, its equation stays chosen (R-37).
+    if (!back) this.setupDone = false;
+    const event = this.problemEvent(p);
+    if (event.kind === "practice") this.lastPractice = p;
+    this.out(event);
+    // The problem shows first, so there's no wait on an empty card while the intro streams.
+    for (const text of intro) await this.say(text);
+  }
+
+  /**
+   * The problem as the browser sees it. A story (R-37) carries its words in the student's interest
+   * (R-38) and the equations to choose from, and no prompt until the setup is right, so the card
+   * can't show the equation early.
+   */
+  private problemEvent(p: ScriptedProblem): ServerEvent & { type: "problem" } {
     const lessonOnly = this.order.filter((q) => q !== CONFIDENCE_BUILDER);
     const position = lessonOnly.indexOf(p) + 1;
     const kind = this.probe?.problem === p ? "probe" : p === CONFIDENCE_BUILDER ? "warmup" : "practice";
-    if (kind === "practice") this.lastPractice = p;
-    this.out({
+    const setup = p.story !== undefined && !this.setupDone;
+    return {
       type: "problem",
       problem_id: p.problem_id,
       skill_id: p.skill_id,
-      prompt: p.prompt,
-      instruction: p.instruction,
+      prompt: setup ? "" : p.prompt,
+      instruction: setup ? STORY_INSTRUCTION : p.instruction,
       format: p.format ?? "answer",
       kind,
       answer_example: answerExample(p.variable === undefined ? "x" : p.variable, p.solutions),
       position, // 0 for the confidence builder, which isn't one of the lesson's problems
       total: lessonOnly.length,
-    });
-    // The problem shows first, so there's no wait on an empty card while the intro streams.
-    for (const text of intro) await this.say(text);
+      ...(p.story ? { story: { text: storyText(p.story, this.skin()), choices: p.story.choices } } : {}),
+    };
   }
 
   private skin() {
@@ -547,6 +623,7 @@ export class MockTransport implements TutorTransport {
   /** Same puzzle, same progress, new look: an interest switch or the child's color pick. */
   private reskin(): void {
     if (this.puzzle) this.out({ type: "puzzle", puzzle: toWire(this.puzzle, this.skin()) });
+    else if (this.current?.story) this.out(this.problemEvent(this.current));
   }
 
   private async puzzleMove(live: LivePuzzle, move: PuzzleMove): Promise<void> {

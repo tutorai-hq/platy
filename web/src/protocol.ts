@@ -21,9 +21,14 @@ export interface Problem {
   instruction: string;
   /**
    * "answer": one answer box. "steps": the student writes one line at a time, and each line
-   * is checked before the next opens (R-48). The final answer alone never counts.
+   * is checked before the next opens (R-48). The final answer alone never counts. "story": a
+   * story problem (R-37): the student picks the equation that says the story, then solves it in
+   * steps. `prompt` is empty until the setup is right; the server then sends the problem again,
+   * with the equation as its prompt. The same problem sent again with a new `story` is a new skin (R-38).
    */
-  format: "answer" | "steps";
+  format: "answer" | "steps" | "story";
+  /** A story problem's words and the equations to choose from, in the student's notation. */
+  story?: { text: string; choices: string[] };
   /**
    * "practice": one of the session's problems. "probe": a quick check one or two levels down the
    * skill map before teaching (R-01). "warmup": the easier problem after a pause (R-21).
@@ -82,6 +87,12 @@ export type ServerEvent =
    * slip-map id (R-40, web/src/content/slips.json) a wrong line matches; the browser shows its hint.
    */
   | { type: "step_result"; problem_id: string; line: number; result: StepResult; slip?: string }
+  /**
+   * The verdict on a story problem's setup (R-37), graded by equivalence. After a correct one the
+   * server sends the `problem` again with its prompt filled in, and the step solver takes over; a
+   * wrong one gets a hint about the story in the chat, never the equation (R-02). Proposed for Connor.
+   */
+  | { type: "setup_result"; problem_id: string; result: "correct" | "incorrect" | "unreadable" }
   /** Hard reset at a natural breakpoint (R-17, A-4): the UI clears the visible chat. */
   | { type: "reset"; reason: "problem_end" | "topic_switch" }
   /** De-escalation ladder, first rung (R-21). */
@@ -126,6 +137,8 @@ export type ClientEvent =
   | { type: "answer"; problem_id: string; text: string }
   /** One line of a step-by-step solution. `line` counts from 1; the server checks it (R-48). */
   | { type: "step"; problem_id: string; line: number; text: string }
+  /** The equation the student picked or wrote for a story problem (R-37). */
+  | { type: "setup"; problem_id: string; text: string }
   | { type: "hint_requested"; problem_id: string }
   /** The child chose "keep going" on the pause screen. */
   | { type: "resume" }

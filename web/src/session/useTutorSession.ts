@@ -73,6 +73,20 @@ export function useTutorSession(makeTransport: () => TutorTransport = createTran
     [send, steps],
   );
 
+  const setup = state.setup;
+  const chooseSetup = useCallback(
+    (problem_id: string, text: string) => {
+      // One equation at a time, while the server's verdict is out (the reducer's setup_sent rule).
+      if (!setup || setup.problem_id !== problem_id || setup.pending !== null) return;
+      // The equation they picked shows in the chat, so the tutor's question about it reads in
+      // context. React state only (P-1).
+      dispatch({ type: "child_said", id: `k${++childMessages.current}`, text });
+      dispatch({ type: "setup_sent", text });
+      send({ type: "setup", problem_id, text });
+    },
+    [send, setup],
+  );
+
   const puzzleMove = useCallback(
     (instance_id: string, move: PuzzleMove, echo?: string) => {
       // What the child typed or tapped shows in the chat, like an answer does, so the tutor's
@@ -105,6 +119,7 @@ export function useTutorSession(makeTransport: () => TutorTransport = createTran
     say,
     answer,
     step,
+    setup: chooseSetup,
     confidence: confide,
     hint: (problem_id: string) => {
       dispatch({ type: "child_said", id: `k${++childMessages.current}`, text: "Can I get a hint?" });
