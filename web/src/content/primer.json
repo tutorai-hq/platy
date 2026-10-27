@@ -9,7 +9,8 @@
     "teach": "Teach",
     "repair": "Repair",
     "pause": "Pause",
-    "warm_up": "Warm-up"
+    "warm_up": "Warm-up",
+    "check_confidence": "Confidence check"
   },
   "reasons": {
     "path_start": "Starting the path at {skill}.",
@@ -31,7 +32,12 @@
     "answer_right": "Right answer. Evidence for {skill}.",
     "answer_wrong": "Wrong answer. Evidence against {skill}.",
     "three_misses": "Three misses on one {skill} problem. Suggesting a pause.",
-    "confidence": "An easier {skill} problem, to rebuild confidence."
+    "confidence": "An easier {skill} problem, to rebuild confidence.",
+    "calibrate": "Asking how sure before confirming the {skill} answer, to compare confidence with the result.",
+    "key_step": "Asking which step was the key one in {skill}, after teaching it.",
+    "calibrated": "Certain and right in {skill}: confidence matches the result.",
+    "underconfident": "Right in {skill}, but less than certain. Building trust in the method.",
+    "key_step_noted": "Noted which step they see as the key one in {skill}."
   },
   "hypotheses": {
     "suspects_gap": "Suspects a gap in {skill}. Probing.",

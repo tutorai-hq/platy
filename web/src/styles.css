@@ -296,6 +296,39 @@ button, input { font: inherit; color: inherit; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
+/* The confidence check (R-30), where the answer buttons were. One scale with three equal places:
+   nothing marks an end as the better one, so the honest tap is the easy one. The reasons come in
+   below it once a place is tapped, with one short slide; the chosen place stays lit. */
+.sure { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.sure__ask { font-weight: 700; }
+.sure__scale {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px;
+  padding: 3px; border-radius: 999px; background: var(--paper);
+}
+.sure__level {
+  min-height: 52px; padding: 8px 6px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--ink); font-weight: 700; line-height: 1.2;
+  transition: background-color 120ms, color 120ms, opacity 200ms;
+}
+@media (hover: hover) {
+  .sure__level:not(:disabled, [aria-disabled="true"]):hover { background: var(--river-wash); color: var(--river-deep); }
+}
+.sure__level--on { background: var(--river); color: #fff; }
+.sure__level:disabled { cursor: default; }
+.sure__level:disabled:not(.sure__level--on) { opacity: 0.45; }
+.sure__choices { display: flex; flex-direction: column; gap: 8px; animation: sure-in 220ms ease-out both; }
+@keyframes sure-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sure__choice { text-align: left; min-height: 52px; padding: 10px 18px; }
+.sure__skip {
+  align-self: flex-start; border: 0; background: none; padding: 8px 18px; min-height: 44px;
+  color: var(--ink-soft); cursor: pointer; border-radius: 999px;
+}
+.sure__skip:hover { color: var(--ink); background: var(--paper); }
+@media (max-width: 820px) {
+  .sure__level { min-height: 48px; font-size: 0.95rem; }
+  .sure__choice { min-height: 48px; }
+}
+
 /* Step-by-step solving (R-48). Lines line up on their equals signs, like work on paper. */
 .stepsolver { position: relative; }
 .ladder { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 1.45rem; }
@@ -402,6 +435,7 @@ button, input { font: inherit; color: inherit; }
 .map { width: 100%; min-width: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 14px; text-align: left; }
 .map .map__cheer { font-size: 1.1rem; color: var(--ink); text-align: center; }
 .map .map__solved { color: var(--ink-soft); text-align: center; margin-bottom: -6px; }
+.map .map__sure { color: var(--ink-soft); text-align: center; margin-top: -6px; }
 .map__scroll { overflow-x: auto; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
 .map__svg { display: block; width: 100%; height: auto; min-width: 900px; }
 .map__edge { fill: none; stroke: var(--line); stroke-width: 2; }

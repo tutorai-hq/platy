@@ -1,3 +1,4 @@
+import { REASON_CODES, STEP_CODES } from "../content/confidence";
 import type { PaletteId, PuzzleMove, PuzzleTemplate } from "../content/types";
 import { answerExample, checkAnswer, matchesValue, readAnswer } from "../mock/answers";
 import { SLIPS, slipRepair } from "../content/slips";
@@ -10,7 +11,7 @@ import {
   skinFor, toWire, worksOut,
 } from "../mock/puzzles";
 import {
-  BACK_TO_IT, CLOSING, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OFF_TOPIC, OPENING,
+  BACK_TO_IT, CLOSING, CONFIDENCE_ASK, CONFIDENCE_ASK_LATE, CONFIDENCE_CHAT, CONFIDENCE_REPLIES, DETOUR_BACK, DETOUR_PROBE, DETOUR_PROBE_DEEPER, DETOUR_PUZZLE, DETOUR_TEACH, NEXT_PROBLEM, CONFIDENCE_BUILDER, confirmProblem, DEMO_LEAD, EXPLAIN_FIRST, KEEP_GOING_READY, KEY_STEP_ASK, KEY_STEP_CHAT, KEY_STEP_REPLIES, KEY_STEP_REPLY_NONE, LESSON, NO_ANSWERS, NO_ANSWERS_TRY_FIRST, NUDGES, OFF_TOPIC, OPENING,
   OUT_OF_HINTS, PREREQS_SOLID, PROBE_ASK, PROBE_DEEPER, PROBE_LEAD, PROBE_THANKS, probeProblem, PUZZLE_NUDGE,
   PUZZLE_UNREADABLE, PUZZLE_UNREADABLE_VALUE, REPAIR_LEAD, SAFETY_RESOURCES, type ScriptedProblem, SEE_MAP, SHOW_ONE, STEP_IN_LINES,
   STEP_LESSON, STEP_REPAIR_LEAD, STEP_UNREADABLE, STEP_UNREADABLE_VALUE, TAKE_A_BREATH, TRY_FIRST, UNREADABLE,
@@ -105,6 +106,16 @@ export class MockTransport implements TutorTransport {
    */
   private next: (() => Promise<void>) | null = null;
 
+  // The metacognition beat (R-30), once per session: how sure, before confirming the right answer
+  // on the problem after a detour, or, if the session gets to its end without one, one beat before
+  // the closing line (the key step, after a reteach). `beat` holds what finishes once it's answered.
+  private beat: { kind: "how_sure" | "key_step"; problem: ScriptedProblem; finish: () => Promise<void> } | null = null;
+  private beatDone = false;
+  /** A worked example taught a gap this session, so the final beat asks for its key step. */
+  private retaught = false;
+  private lastPractice: ScriptedProblem | null = null;
+  private lastSolved: ScriptedProblem | null = null;
+
   constructor(
     private readonly timing: MockTiming = DEMO_TIMING,
     private readonly seed = 20261018,
@@ -151,7 +162,8 @@ export class MockTransport implements TutorTransport {
           this.closed = true;
           return;
         case "skip":
-          if (this.next) await this.take();
+          if (this.beat) await this.skipBeat();
+          else if (this.next) await this.take();
           else if (this.probe) await this.leaveProbe();
           else if (this.puzzle) await this.finishPuzzle();
           else if (this.current) await this.finishProblem();
@@ -190,20 +202,25 @@ export class MockTransport implements TutorTransport {
         await this.take();
         return;
       case "hint_requested":
-        if (p && !this.next) await this.hint(p);
+        if (p && !this.next && !this.beat) await this.hint(p);
         return;
       case "answer":
-        if (this.next) return;
+        if (this.next || this.beat) return;
         // A step-by-step problem is solved in lines; the answer alone never counts (R-48).
         if (p && event.problem_id === p.problem_id && p.format !== "steps") await this.answer(p, event.text);
         return;
       case "step":
-        if (this.next) return;
+        if (this.next || this.beat) return;
         if (p?.format === "steps" && event.problem_id === p.problem_id) await this.step(p, event.line, event.text);
         return;
       case "child_message":
-        if (this.puzzle) await this.puzzleChat(this.puzzle, event.text);
+        // During the beat, what they say stays theirs (memory only); the tap is what moves on.
+        if (this.beat) await this.say(this.beat.kind === "how_sure" ? CONFIDENCE_CHAT : KEY_STEP_CHAT);
+        else if (this.puzzle) await this.puzzleChat(this.puzzle, event.text);
         else await this.chat(p, event.text);
+        return;
+      case "confidence":
+        if (this.beat && event.problem_id === this.beat.problem.problem_id) await this.confidence(event.level, event.reason);
         return;
       case "puzzle_move":
         if (this.puzzle?.instance_id === event.instance_id) await this.puzzleMove(this.puzzle, event.move);
@@ -257,6 +274,17 @@ export class MockTransport implements TutorTransport {
   private async answer(p: ScriptedProblem, text: string): Promise<void> {
     if (this.probe?.problem === p) return this.probeAnswer(this.probe, text);
     const result = checkAnswer(text, p.solutions);
+    if (result === "correct" && this.beatDue(p)) {
+      // How sure, before the verdict (R-30). The verdict and the rest follow the answer to it.
+      this.primer.observe(p.skill_id, true);
+      await this.askConfidence("how_sure", p, CONFIDENCE_ASK, async () => {
+        this.out({ type: "answer_result", problem_id: p.problem_id, result });
+        this.think("accept_line", "answer_right", p.skill_id);
+        await this.solvedLines(p);
+        await this.finishProblem();
+      });
+      return;
+    }
     this.out({ type: "answer_result", problem_id: p.problem_id, result });
     if (result === "unreadable") {
       await this.say(UNREADABLE);
@@ -305,7 +333,9 @@ export class MockTransport implements TutorTransport {
     const result = checkStep(prev, text);
     // A wrong line that matches a known slip names it, so its hint shows on the line (R-40).
     const slip = result === "invalid" ? detectSlip(p.skill_id, { prev, next: text }) : null;
-    this.out({ type: "step_result", problem_id: p.problem_id, line, result, ...(slip ? { slip } : {}) });
+    // On the line that solves the problem after a detour, how sure comes before the verdict (R-30).
+    const beat = result === "solved" && this.beatDue(p);
+    if (!beat) this.out({ type: "step_result", problem_id: p.problem_id, line, result, ...(slip ? { slip } : {}) });
     switch (result) {
       case "valid":
         // The line's motion is the feedback; the tutor stays quiet so the student keeps going.
@@ -315,16 +345,22 @@ export class MockTransport implements TutorTransport {
         this.primer.observe(p.skill_id, true);
         this.think("accept_line", "line_valid", p.skill_id);
         return;
-      case "solved":
+      case "solved": {
         this.stepLines.push(text);
         this.awaitingWhy = false;
         this.primer.observe(p.skill_id, true);
         // The fresh problem after a repair is solved: the fix held.
         if (p.problem_id.startsWith("g")) this.primer.hypothesize("fix_holding", p.skill_id);
-        this.think("accept_line", "solved", p.skill_id);
-        await this.solvedLines(p);
-        await this.finishProblem();
+        const confirm = async () => {
+          if (beat) this.out({ type: "step_result", problem_id: p.problem_id, line, result });
+          this.think("accept_line", "solved", p.skill_id);
+          await this.solvedLines(p);
+          await this.finishProblem();
+        };
+        if (beat) await this.askConfidence("how_sure", p, CONFIDENCE_ASK, confirm);
+        else await confirm();
         return;
+      }
       case "unreadable":
         // On an expression to work out (no x), the line is numbers and operations.
         await this.say(p.variable === null ? STEP_UNREADABLE_VALUE : STEP_UNREADABLE);
@@ -387,6 +423,8 @@ export class MockTransport implements TutorTransport {
     this.puzzle = null;
     this.returnTo = null;
     this.confirm = false;
+    // A pause during the beat drops it unanswered; the session still owes one before it closes.
+    this.beat = null;
     if (this.probe || this.gap) this.primer.dropHypothesis();
     this.probe = null;
     this.gap = null;
@@ -440,6 +478,7 @@ export class MockTransport implements TutorTransport {
     const lessonOnly = this.order.filter((q) => q !== CONFIDENCE_BUILDER);
     const position = lessonOnly.indexOf(p) + 1;
     const kind = this.probe?.problem === p ? "probe" : p === CONFIDENCE_BUILDER ? "warmup" : "practice";
+    if (kind === "practice") this.lastPractice = p;
     this.out({
       type: "problem",
       problem_id: p.problem_id,
@@ -602,7 +641,10 @@ export class MockTransport implements TutorTransport {
       await this.present(fresh);
       return;
     }
-    if (this.gap) this.primer.taught(this.gap);
+    if (this.gap) {
+      this.primer.taught(this.gap);
+      this.retaught = true;
+    }
     if (back) this.think("pose_problem", this.gap ? "gap_taught" : "back_to_problem", back.skill_id);
     this.gap = null;
     const next = back ?? this.order[this.index];
@@ -616,6 +658,7 @@ export class MockTransport implements TutorTransport {
   /** The lines for a solved problem. The first-try line is true only on a clean first try (R-06). */
   private async solvedLines(p: ScriptedProblem): Promise<void> {
     this.solved++;
+    this.lastSolved = p;
     const clean = this.misses === 0 && this.partials === 0 && !this.returned;
     if (clean) this.firstTry++;
     for (const line of p.correct) await this.say(line);
@@ -628,9 +671,70 @@ export class MockTransport implements TutorTransport {
    * off mid-sentence), and the map waits for the See my map tap.
    */
   private async closeSession(): Promise<void> {
+    // A session that gets here without its beat has one now, about the problem still on screen:
+    // the key step after a reteach, or how sure they were about the last one solved (R-30).
+    const p = this.lastPractice;
+    if (!this.beatDone && !this.beat && p && (this.retaught || this.lastSolved === p)) {
+      const kind = this.retaught ? "key_step" : "how_sure";
+      await this.askConfidence(kind, p, kind === "key_step" ? KEY_STEP_ASK : CONFIDENCE_ASK_LATE, () => this.closingLine());
+      return;
+    }
+    await this.closingLine();
+  }
+
+  /** The closing line, then the map (behind its tap when the demo waits). */
+  private async closingLine(): Promise<void> {
     await this.say(CLOSING);
     if (this.timing.wait) this.offer(SEE_MAP, async () => this.end());
     else this.end();
+  }
+
+  /**
+   * The beat lands on the first right answer after a detour: the fresh problem that checks a
+   * repair held, or the problem the student came back to after a quick check or a worked
+   * example. That is where knowing how sure they are says the most. Once per session, and never
+   * on a quick check or the warm-up.
+   */
+  private beatDue(p: ScriptedProblem): boolean {
+    if (this.beatDone || this.beat !== null || p === CONFIDENCE_BUILDER || this.probe?.problem === p) return false;
+    return this.returned || p.problem_id.startsWith("g");
+  }
+
+  /** Ask, and hold `finish` (the verdict and what follows it) for the answer. */
+  private async askConfidence(kind: "how_sure" | "key_step", p: ScriptedProblem, ask: string, finish: () => Promise<void>): Promise<void> {
+    this.beat = { kind, problem: p, finish };
+    this.think("check_confidence", kind === "how_sure" ? "calibrate" : "key_step", p.skill_id);
+    // The check shows on the card first; the words stream beside it. Codes only (R-30).
+    this.out({ type: "confidence_check", problem_id: p.problem_id, kind, choices: [...(kind === "how_sure" ? REASON_CODES : STEP_CODES)] });
+    await this.say(ask);
+  }
+
+  /** The student's answer to the beat. The browser's events aren't trusted: an unknown code counts as none. */
+  private async confidence(level: 1 | 2 | 3 | null, reason: string | null): Promise<void> {
+    const beat = this.beat!;
+    this.beat = null;
+    this.beatDone = true;
+    const skill = beat.problem.skill_id;
+    if (beat.kind === "how_sure") {
+      const l = level !== null && ([1, 2, 3] as number[]).includes(level) ? level : null;
+      const r = reason !== null && REASON_CODES.includes(reason) ? (reason as keyof typeof CONFIDENCE_REPLIES.reason) : null;
+      if (l !== null) this.think("check_confidence", l === 3 ? "calibrated" : "underconfident", skill);
+      // The reason gets the reply; a level alone (a guess, or "rather not say") gets the level's.
+      const reply = r !== null ? CONFIDENCE_REPLIES.reason[r] : l !== null ? CONFIDENCE_REPLIES.level[l] : null;
+      if (reply) await this.say(reply);
+    } else {
+      this.think("check_confidence", "key_step_noted", skill);
+      await this.say((reason !== null && KEY_STEP_REPLIES[reason]) || KEY_STEP_REPLY_NONE);
+    }
+    await beat.finish();
+  }
+
+  /** The demo's skip during the beat: on without an answer, and the session's beat counts as had. */
+  private async skipBeat(): Promise<void> {
+    const beat = this.beat!;
+    this.beat = null;
+    this.beatDone = true;
+    await beat.finish();
   }
 
   private end(): void {

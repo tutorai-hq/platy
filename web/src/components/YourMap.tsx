@@ -1,9 +1,11 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { calibrationLine } from "../content/confidence";
 import words from "../content/map.json";
 import {
   EDGES, edgePath, encouragement, H, LAYOUT, mapStates, NODES, type NodeState, type NodeView, STATE_WORDS, STATES, todayNodes, W,
 } from "../content/map";
 import type { SkillReport } from "../protocol";
+import type { Calibration } from "../session/state";
 
 // "Your map" (R-13): the whole skill map, drawn from skill_map.json, with what moved today, what's
 // due for review and what unlocks next. Its only input is the session's mastery report; nothing
@@ -34,9 +36,11 @@ interface Props {
   report: readonly SkillReport[];
   solved?: number;
   firstTry?: number | null;
+  /** The session's confidence check against its verdict (R-30), for one line; null when there was none. */
+  calibration?: Calibration | null;
 }
 
-export function YourMap({ report, solved = 0, firstTry = null }: Props) {
+export function YourMap({ report, solved = 0, firstTry = null, calibration = null }: Props) {
   const views = mapStates(report);
   const { pos, width, height } = LAYOUT;
 
@@ -70,6 +74,10 @@ export function YourMap({ report, solved = 0, firstTry = null }: Props) {
       {/* Nothing solved says nothing, rather than "0 problems" over a line about effort. */}
       {solved > 0 && <p className="map__solved">{solved === 1 ? words.solved.one : words.solved.many.replace("{n}", String(solved))}</p>}
       <p className="map__cheer">{encouragement(views, solved, firstTry)}</p>
+      {/* How sure they said they were, against what happened: calibration from this session only (R-30). */}
+      {calibration && calibration.right !== null && (
+        <p className="map__sure">{calibrationLine(calibration.level, calibration.right)}</p>
+      )}
 
       {today.length > 0 && (
         <ol className="map__today" aria-label={words.today}>

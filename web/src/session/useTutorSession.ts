@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { choiceText, type Level, levelText } from "../content/confidence";
 import type { PaletteId, PuzzleMove } from "../content/types";
 import type { ClientEvent } from "../protocol";
 import { createTransport } from "../transport";
@@ -83,6 +84,20 @@ export function useTutorSession(makeTransport: () => TutorTransport = createTran
     [send],
   );
 
+  const confidence = state.confidence;
+  const confide = useCallback(
+    (problem_id: string, level: Level | null, reason: string | null) => {
+      if (!confidence || confidence.problem_id !== problem_id) return;
+      // What they tapped shows in the chat in the table's words, so the tutor's reply reads in
+      // context. The event itself carries the codes (R-30); their words stay in React state (P-1).
+      const words = [level === null ? null : levelText(level), reason === null ? null : choiceText(confidence.kind, reason)].filter((w) => w !== null);
+      if (words.length > 0) dispatch({ type: "child_said", id: `k${++childMessages.current}`, text: words.join(". ") });
+      dispatch({ type: "confidence_sent", level });
+      send({ type: "confidence", problem_id, level, reason });
+    },
+    [confidence, send],
+  );
+
   return {
     state,
     isMock,
@@ -90,6 +105,7 @@ export function useTutorSession(makeTransport: () => TutorTransport = createTran
     say,
     answer,
     step,
+    confidence: confide,
     hint: (problem_id: string) => {
       dispatch({ type: "child_said", id: `k${++childMessages.current}`, text: "Can I get a hint?" });
       send({ type: "hint_requested", problem_id });

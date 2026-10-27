@@ -2,9 +2,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import skillMap from "../../../src/platy/skills/data/skill_map.json";
+import { calibrationLine } from "../content/confidence";
 import { EDGES, edgeRoute, encouragement, H, LAYOUT, mapStates, NODES, type NodeState, STATE_WORDS, STATES, W } from "../content/map";
 import type { SkillReport } from "../protocol";
-import { initialState, reducer } from "../session/state";
+import { type Calibration, initialState, reducer } from "../session/state";
 import { YourMap } from "./YourMap";
 
 // R-13: "Your map" is generated from skill_map.json (A-6), and a skill's state comes only from
@@ -165,6 +166,16 @@ describe("Your map (R-13)", () => {
       expect(today).not.toContain("linear_equation_word_problems");
       expect(html).toContain("See the whole map");
     });
+  });
+
+  it("has one line about how sure they said they were, once the verdict is in (R-30)", () => {
+    const html = (calibration: Calibration | null) =>
+      renderToStaticMarkup(createElement(YourMap, { report: report(BASE), calibration })).replace(/&#x27;/g, "'");
+    expect(html({ level: 3, right: true })).toContain(calibrationLine(3, true));
+    expect(html({ level: 2, right: false })).toContain(calibrationLine(2, false));
+    // No verdict yet, or no beat: no line, and never a guess at one.
+    expect(html({ level: 2, right: null })).not.toContain("You said");
+    expect(html(null)).not.toContain("You said");
   });
 
   it("keeps the map in memory for the end screen only, and drops it at the next start", () => {

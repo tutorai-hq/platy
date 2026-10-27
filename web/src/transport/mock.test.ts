@@ -5,9 +5,11 @@ import skillMap from "../../../src/platy/skills/data/skill_map.json";
 import { PRIMER_CODES, primerText, skillName } from "../content/primer";
 import { isOneOf } from "../mock/generate";
 import { answerExample } from "../mock/answers";
+import { REASON_CODES, STEP_CODES } from "../content/confidence";
 import { bareNumber } from "../mock/grade";
 import {
-  confirmProblem, EXPLAIN_FIRST, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD,
+  CLOSING, CONFIDENCE_ASK, CONFIDENCE_ASK_LATE, CONFIDENCE_CHAT, CONFIDENCE_REPLIES, confirmProblem, EXPLAIN_FIRST, KEY_STEP_ASK,
+  KEY_STEP_REPLIES, KEY_STEP_REPLY_NONE, LESSON, NO_ANSWERS, NUDGES, OFF_TOPIC, probeProblem, STEP_LESSON, STEP_REPAIR_LEAD,
   STEP_UNREADABLE_VALUE,
 } from "../mock/script";
 import { firstWrong, workOut } from "../mock/working";
@@ -39,6 +41,11 @@ function harness(lesson = LESSON, seed?: number, timing = FAST) {
   const cont = () => send({ type: "continue" });
   return { t, events, settle, send, said, problems, cont };
 }
+
+/** The student answers the session's confidence check (R-30): certain, because they checked. */
+const confide = (h: ReturnType<typeof harness>, problem_id: string, level: 1 | 2 | 3 | null = 3, reason: string | null = "checked_back") =>
+  h.send({ type: "confidence", problem_id, level, reason });
+const checks = (h: ReturnType<typeof harness>) => h.events.filter((e) => e.type === "confidence_check");
 
 describe("MockTransport", () => {
   it("opens with a greeting and the first problem", async () => {
@@ -116,6 +123,7 @@ describe("MockTransport", () => {
     await h.send({ type: "answer", problem_id: "p3", text: "7" });
     expect(h.said(mark).join(" ")).toContain("other number");
     await h.send({ type: "answer", problem_id: "p3", text: "7 or -7" });
+    await confide(h, "p3"); // the session's one confidence check comes before it closes (R-30)
     expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3 });
   });
 
@@ -412,6 +420,7 @@ describe("MockTransport", () => {
       let mark = h.events.length;
       await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
       expect(h.said(mark).join(" ")).toContain("You didn't");
+      await confide(h, "p3");
       expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3, first_try: 3 });
 
       h = await toP3();
@@ -420,6 +429,7 @@ describe("MockTransport", () => {
       await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
       expect(h.said(mark).join(" ")).toContain("That's both answers");
       expect(h.said(mark).join(" ")).not.toContain("You didn't");
+      await confide(h, "p3");
       expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3, first_try: 2 });
     });
 
@@ -449,6 +459,7 @@ describe("MockTransport", () => {
         await h.cont(); // Next problem waits for the tap too
       }
       await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
+      await confide(h, "p3");
       expect(h.said().at(-1)).toMatch(/^That's all of them\./);
       expect(h.events.filter((e) => e.type === "tutor_message").at(-1)).toMatchObject({ done: true });
       expect(h.events.at(-1)).toEqual({ type: "next_up", label: "See my map" });
@@ -468,6 +479,7 @@ describe("MockTransport", () => {
       expect(h.events.filter((e) => e.type === "problem").at(-1)).toMatchObject({ problem_id: "s1" });
       await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 12" });
       await h.send({ type: "step", problem_id: "s1", line: 2, text: "x = 6" });
+      await confide(h, "s1"); // the problem after a detour carries the confidence check (R-30)
       h.t.demo("skip"); // past s2, which doesn't count as solved
       await h.settle();
       expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 1, first_try: 0 });
@@ -669,6 +681,7 @@ describe("MockTransport", () => {
       const [, ca, sign, cb, cc] = /^(-?\d+)x ([+-]) (\d+) = (-?\d+)$/.exec(fresh.prompt) ?? [];
       const answer = (Number(cc) - (sign === "-" ? -1 : 1) * Number(cb)) / Number(ca);
       await h.send({ type: "step", problem_id: fresh.problem_id, line: 1, text: `x = ${answer}` });
+      await confide(h, fresh.problem_id); // how sure, before the verdict (R-30)
       expect(results(h).at(-1)).toBe("solved");
       expect(h.problems()).toEqual(["s1", "one_step_equations.1", "s1", fresh.problem_id, "s2"]);
     });
@@ -791,6 +804,7 @@ describe("MockTransport", () => {
       // Worked out right, one operation per line, it's solved.
       const working = workOut(fresh.prompt, "usual")!.lines;
       for (const [i, text] of working.entries()) await h.send({ type: "step", problem_id: "g1", line: i + 1, text });
+      await confide(h, "g1"); // how sure, before the verdict (R-30)
       expect(lastResult(h)).toMatchObject({ result: "solved" });
       expect(h.problems()).toEqual(["e1", "g1"]);
     });
@@ -836,6 +850,179 @@ describe("MockTransport", () => {
       await h.send({ type: "step", problem_id: "e1", line: 1, text: "x = 2" });
       expect(lastResult(h)).toMatchObject({ result: "unreadable" });
       expect(h.said(mark).join(" ")).toBe(STEP_UNREADABLE_VALUE);
+    });
+  });
+
+  // R-30: one metacognition beat per session. It lands on the right answer to the problem after a
+  // detour (the demo arc's fresh problem), before the verdict; a session that gets to its end
+  // without one has one before the closing line: the key step after a reteach, or how sure.
+  describe("confidence check (R-30)", () => {
+    const results = (h: ReturnType<typeof harness>, from = 0) =>
+      h.events.slice(from).flatMap((e) => (e.type === "step_result" ? [e.result] : []));
+    const kinds = (h: ReturnType<typeof harness>) => checks(h).map((e) => (e.type === "confidence_check" ? e.kind : null));
+    /** The demo arc to the fresh problem after the repair, with its last line written but not yet confirmed. */
+    const atFresh = async (seed?: number) => {
+      const h = harness(STEP_LESSON, seed);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "5" });
+      await h.cont();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 22" });
+      await h.cont();
+      h.t.demo("skip"); // through the repair puzzle
+      await h.settle();
+      const fresh = h.events.filter((e) => e.type === "problem").at(-1);
+      if (fresh?.type !== "problem") throw new Error("expected a problem");
+      expect(fresh.problem_id).toBe("g1");
+      const [, ca, sign, cb, cc] = /^(-?\d+)x ([+-]) (\d+) = (-?\d+)$/.exec(fresh.prompt) ?? [];
+      const answer = (Number(cc) - (sign === "-" ? -1 : 1) * Number(cb)) / Number(ca);
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "g1", line: 1, text: `x = ${answer}` });
+      return Object.assign(h, { mark, answer });
+    };
+
+    it("asks how sure before the verdict on the fresh problem, then confirms, once per session", async () => {
+      const h = await atFresh();
+      // The check is on the card, the ask is in the chat, and the verdict hasn't been given (R-02).
+      expect(checks(h)).toEqual([{ type: "confidence_check", problem_id: "g1", kind: "how_sure", choices: [...REASON_CODES] }]);
+      expect(h.said(h.mark)).toEqual([CONFIDENCE_ASK]);
+      expect(results(h, h.mark)).toEqual([]);
+      expect(h.events.slice(h.mark).some((e) => e.type === "answer_result" || e.type === "reset")).toBe(false);
+      expect(h.said(h.mark).join(" ")).not.toMatch(/right|checks out|yes/i);
+
+      await confide(h, "g1", 3, "checked_back");
+      // The verdict, the reply to the reason, the problem's own lines, then on to the next problem.
+      expect(results(h, h.mark)).toEqual(["solved"]);
+      expect(h.said(h.mark).slice(1, 3)).toEqual([CONFIDENCE_REPLIES.reason.checked_back, `Yes, $x = ${h.answer}$, and every line checks out. The fix held.`]);
+      expect(h.problems().at(-1)).toBe("s2");
+      // Exactly one beat: the next solved problem is confirmed straight away, and the session closes with no second one.
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "s2", line: 1, text: "x = 5" });
+      expect(results(h, mark)).toEqual(["solved"]);
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 2 });
+      expect(checks(h)).toHaveLength(1);
+    });
+
+    it("replies to the level when there's no reason, and sends codes only to the primer view", async () => {
+      const h = await atFresh();
+      const mark = h.events.length;
+      await confide(h, "g1", 1, null);
+      expect(h.said(mark)[0]).toBe(CONFIDENCE_REPLIES.level[1]);
+      const moves = h.events.flatMap((e) => (e.type === "primer_state" ? [`${e.move.code}:${e.move.reason}`] : []));
+      expect(moves).toContain("check_confidence:calibrate");
+      expect(moves).toContain("check_confidence:underconfident");
+      for (const code of ["calibrate", "underconfident"]) expect(primerText("reasons", code, "two_step_equations")).not.toBeNull();
+      expect(PRIMER_CODES.moves).toContain("check_confidence");
+    });
+
+    it("runs one final beat before the session ends when none has happened", async () => {
+      const h = harness(); // the answer-box lesson, with no detour
+      await h.settle();
+      await h.send({ type: "answer", problem_id: "p1", text: "5" });
+      await h.send({ type: "answer", problem_id: "p2", text: "8" });
+      expect(checks(h)).toEqual([]);
+      const mark = h.events.length;
+      await h.send({ type: "answer", problem_id: "p3", text: "7, -7" });
+      // The last answer is confirmed first; the beat about it comes before the closing line.
+      expect(h.events.slice(mark).find((e) => e.type === "answer_result")).toMatchObject({ result: "correct" });
+      expect(kinds(h)).toEqual(["how_sure"]);
+      expect(h.said(mark).at(-1)).toBe(CONFIDENCE_ASK_LATE);
+      expect(h.events.some((e) => e.type === "session_end")).toBe(false);
+      await confide(h, "p3", 2, "like_last_one");
+      expect(h.said(mark).slice(-2)).toEqual([CONFIDENCE_REPLIES.reason.like_last_one, CLOSING]);
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 3 });
+    });
+
+    it("asks for the key step before closing when a gap was taught and no beat ran", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.cont();
+      await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      await h.cont();
+      for (let i = 0; i < 3; i++) {
+        h.t.demo("skip"); // the worked example's fades
+        await h.settle();
+      }
+      expect(h.problems().at(-1)).toBe("s1");
+      h.t.demo("skip"); // past s1
+      await h.settle();
+      const mark = h.events.length;
+      h.t.demo("skip"); // past s2: the lesson is over
+      await h.settle();
+      expect(checks(h)).toEqual([{ type: "confidence_check", problem_id: "s2", kind: "key_step", choices: [...STEP_CODES] }]);
+      expect(h.said(mark)).toEqual([KEY_STEP_ASK]);
+      expect(h.events.some((e) => e.type === "session_end")).toBe(false);
+      await confide(h, "s2", null, "undo_first");
+      expect(h.said(mark).slice(1)).toEqual([KEY_STEP_REPLIES.undo_first, CLOSING]);
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end" });
+    });
+
+    it("names the key step even when they skip the pick, and ignores a code it doesn't know", async () => {
+      const h = harness(STEP_LESSON);
+      await h.settle();
+      await h.send({ type: "step", problem_id: "s1", line: 1, text: "2x = 99" });
+      await h.cont();
+      await h.send({ type: "answer", problem_id: "one_step_equations.1", text: "-11" });
+      await h.cont();
+      await h.send({ type: "answer", problem_id: "inverse_operations.1", text: "-4" });
+      await h.cont();
+      for (let i = 0; i < 5; i++) {
+        h.t.demo("skip");
+        await h.settle();
+      }
+      const mark = h.events.length;
+      await confide(h, "s2", null, "canary_code");
+      expect(h.said(mark)).toEqual([KEY_STEP_REPLY_NONE, CLOSING]);
+      expect(JSON.stringify(h.events.slice(mark))).not.toContain("canary");
+    });
+
+    it("holds answers, lines and hints during the beat, and takes a chat message as their own words", async () => {
+      const h = await atFresh();
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "g1", line: 2, text: "x = 1" });
+      await h.send({ type: "answer", problem_id: "g1", text: "1" });
+      await h.send({ type: "hint_requested", problem_id: "g1" });
+      expect(h.events.slice(mark)).toEqual([]);
+      await h.send({ type: "child_message", text: "canary-5150 i checked it" });
+      expect(h.said(mark)).toEqual([CONFIDENCE_CHAT]);
+      // Another problem's answer to the beat isn't this one's.
+      await confide(h, "s1");
+      expect(results(h, mark)).toEqual([]);
+      await confide(h, "g1");
+      expect(results(h, mark)).toEqual(["solved"]);
+      expect(JSON.stringify(h.events)).not.toContain("canary");
+    });
+
+    it("skips on to the verdict when the demo skips the beat, and counts the beat as had", async () => {
+      const h = await atFresh();
+      h.t.demo("skip");
+      await h.settle();
+      expect(results(h, h.mark)).toEqual(["solved"]);
+      await h.send({ type: "step", problem_id: "s2", line: 1, text: "x = 5" });
+      expect(h.events.at(-1)).toMatchObject({ type: "session_end", solved: 2 });
+      expect(checks(h)).toHaveLength(1);
+    });
+
+    it("drops the beat on a pause, and asks again on the next right answer after the warm-up", async () => {
+      const h = await atFresh();
+      h.t.demo("pause");
+      await h.settle();
+      await h.send({ type: "resume" });
+      expect(h.problems().at(-1)).toBe("warmup");
+      await h.send({ type: "answer", problem_id: "warmup", text: "5" });
+      // The warm-up is confirmed straight away; the problem they were on comes back.
+      expect(checks(h)).toHaveLength(1);
+      expect(h.problems().at(-1)).toBe("g1");
+      const mark = h.events.length;
+      await h.send({ type: "step", problem_id: "g1", line: 1, text: `x = ${h.answer}` });
+      expect(checks(h)).toHaveLength(2);
+      expect(results(h, mark)).toEqual([]);
+      await confide(h, "g1");
+      expect(results(h, mark)).toEqual(["solved"]);
     });
   });
 

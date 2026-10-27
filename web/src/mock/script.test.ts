@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import confidence from "../content/confidence.json";
 import words from "../content/map.json";
 import * as puzzles from "./puzzles";
 import * as script from "./script";
@@ -37,6 +38,8 @@ collect(script.confirmProblem("g2", "order_of_operations", "20 - 3*(4 + 2)", 2, 
 collect(script.probeProblem("one_step_equations"), "probeProblem", LINES);
 for (const name of ["ITEMS", "WORKED_FADES", "WALKTHROUGH", "REPAIRS"] as const) collect(puzzles[name], name, LINES);
 collect(words.encouragement, "map.encouragement", LINES);
+// R-30: the confidence check's taps, asks and the map's calibration lines are child-facing too.
+collect(confidence, "confidence", LINES);
 
 // A $math$ span or a {slot} counts as one word.
 const plain = (line: string) => line.replace(/\$[^$]*\$/g, " M ").replace(/\{\w+\}/g, " S ");
@@ -44,8 +47,9 @@ const wordsIn = (line: string) => (plain(line).match(/\S+/g) ?? []).length;
 const sentencesIn = (line: string) => Math.max(1, (plain(line).match(/[.!?]+(\s|$)/g) ?? []).length);
 
 describe("the tutor's fixed lines (R-06)", () => {
-  it("covers the script, the puzzles and the map", () => {
+  it("covers the script, the puzzles, the map and the confidence check", () => {
     expect(LINES.length).toBeGreaterThan(100);
+    expect(LINES.map(([path]) => path)).toEqual(expect.arrayContaining(["CONFIDENCE_ASK", "confidence.levels.1", "confidence.calibration.wrong.3"]));
   });
 
   it("are at most two sentences and 25 words each", () => {

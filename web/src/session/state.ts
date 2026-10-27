@@ -52,6 +52,22 @@ export interface StepsState {
   solved: boolean;
 }
 
+/** A confidence check waiting on the card (R-30): codes from the server, words from the table. */
+export interface ConfidenceCheck {
+  problem_id: string;
+  kind: "how_sure" | "key_step";
+  choices: string[];
+}
+
+/**
+ * The one how_sure beat's level and the verdict that followed it, for the line on Your map (R-30).
+ * `right` is null until the verdict arrives. Numbers and a flag only, kept for the end screen.
+ */
+export interface Calibration {
+  level: 1 | 2 | 3;
+  right: boolean | null;
+}
+
 export interface SessionState {
   phase: "welcome" | "live" | "ended" | "error";
   messages: ChatMessage[];
@@ -85,6 +101,10 @@ export interface SessionState {
    * a quick check before teaching (R-01). Null when nothing waits for the student.
    */
   nextUp: string | null;
+  /** The confidence check on the card, until the student answers it (R-30). */
+  confidence: ConfidenceCheck | null;
+  /** How sure they said on the session's beat, against the verdict; shown on Your map. */
+  calibration: Calibration | null;
 }
 
 export interface PrimerView {
@@ -113,6 +133,8 @@ export const initialState: SessionState = {
   primer: null,
   map: null,
   nextUp: null,
+  confidence: null,
+  calibration: null,
 };
 
 export type Action =
@@ -120,6 +142,8 @@ export type Action =
   | { type: "server"; event: ServerEvent }
   | { type: "child_said"; id: string; text: string }
   | { type: "answer_sent" }
+  /** The student answered the confidence check (R-30); `level` is null on a key_step beat. */
+  | { type: "confidence_sent"; level: 1 | 2 | 3 | null }
   | { type: "step_sent"; text: string }
   | { type: "puzzle_move_sent"; move: PuzzleMove }
   | { type: "puzzle_next_sent" }
@@ -151,6 +175,14 @@ export function reducer(state: SessionState, action: Action): SessionState {
     case "answer_sent":
       // Clear the last verdict so the next one shows even if it's the same.
       return { ...state, feedback: null };
+    case "confidence_sent": {
+      if (!state.confidence) return state;
+      // How sure they were, against the verdict: known already when the beat came after it (the
+      // one before the session closes), otherwise filled in when the verdict arrives.
+      const known = state.feedback === "correct" || state.steps?.solved === true ? true : null;
+      const calibration = action.level === null ? state.calibration : { level: action.level, right: known };
+      return { ...state, confidence: null, calibration };
+    }
     case "step_sent":
       if (!state.steps || state.steps.pending !== null || state.steps.solved) return state;
       return { ...state, steps: { ...state.steps, pending: action.text, marked: null } };
@@ -194,7 +226,13 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
       const steps = problem.format === "steps"
         ? { problem_id: problem.problem_id, lines: [], pending: null, marked: null, solved: false }
         : null;
-      return { ...state, problem, feedback: null, steps, moving: false, nextUp: null };
+      return { ...state, problem, feedback: null, steps, moving: false, nextUp: null, confidence: null };
+    }
+    case "confidence_check": {
+      // The check sits on the card of the problem it's about, so it needs that card on screen.
+      if (state.problem?.problem_id !== event.problem_id) return state;
+      const { type: _type, ...confidence } = event;
+      return { ...state, confidence };
     }
     case "puzzle": {
       // The same instance again is only a new look; a new one means the move is over.
@@ -214,6 +252,7 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
         feedback: event.result,
         solved: event.result === "correct" ? state.solved + 1 : state.solved,
         moving: state.moving || event.result === "correct",
+        calibration: verdictFor(state.calibration, event.result === "correct"),
       };
     case "step_result":
       return onStep(state, event.problem_id, event.line, event.result, event.slip);
@@ -228,6 +267,7 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
         feedback: null,
         moving: true,
         nextUp: null,
+        confidence: null,
         // A topic_switch event just before the reset already named the new topic.
         resetNote: event.reason === "topic_switch" && state.resetNote ? state.resetNote : RESET_NOTES[event.reason],
       };
@@ -248,8 +288,21 @@ function onServer(state: SessionState, event: ServerEvent): SessionState {
     case "error":
       return { ...initialState, phase: "error", errorCode: event.code };
     case "session_end":
-      return { ...initialState, phase: "ended", solved: event.solved, firstTry: event.first_try ?? null, map: event.map ?? null };
+      return {
+        ...initialState,
+        phase: "ended",
+        solved: event.solved,
+        firstTry: event.first_try ?? null,
+        map: event.map ?? null,
+        // The beat's level and verdict are numbers only, for the map's one line about it.
+        calibration: state.calibration,
+      };
   }
+}
+
+/** The verdict on the answer a how_sure beat asked about, once it arrives. */
+function verdictFor(c: Calibration | null, right: boolean): Calibration | null {
+  return c && c.right === null ? { ...c, right } : c;
 }
 
 function onStep(state: SessionState, problemId: string, line: number, result: StepResult, slip?: string): SessionState {
@@ -263,10 +316,11 @@ function onStep(state: SessionState, problemId: string, line: number, result: St
       steps: { ...s, lines: [...s.lines, s.pending], pending: null, marked: null, solved },
       solved: solved ? state.solved + 1 : state.solved,
       moving: state.moving || solved,
+      calibration: solved ? verdictFor(state.calibration, true) : state.calibration,
     };
   }
   const marked = { text: s.pending, result, ...(slip ? { slip } : {}) };
-  return { ...state, steps: { ...s, pending: null, marked } };
+  return { ...state, steps: { ...s, pending: null, marked }, calibration: verdictFor(state.calibration, false) };
 }
 
 function onPuzzle(current: PuzzleState | null, puzzle: Puzzle): PuzzleState {

@@ -289,6 +289,39 @@ export const NEXT_PROBLEM = "Next problem";
 export const PROBE_THANKS = "Thanks, that tells me a lot.";
 export const PREREQS_SOLID = "Those basics are solid, so it's just this one move. Back to the problem.";
 
+// The metacognition beat (R-30), once per session. The verdict waits for the student's answer to
+// it, so none of the asks says whether the answer is right (R-02).
+export const CONFIDENCE_ASK = "One thing before I check it. How sure are you?";
+/** The beat before the session closes, about the last problem, which was confirmed already. */
+export const CONFIDENCE_ASK_LATE = "Before we stop, think back to that last one. How sure were you before you checked it?";
+export const KEY_STEP_ASK = "One more thing before we stop. Which step was the key one in the example I showed you?";
+/** A chat message during the beat: their words are welcome, and the tap is what moves on. */
+export const CONFIDENCE_CHAT = "Thanks, that helps. Tap how sure you are, and I'll check it.";
+export const KEY_STEP_CHAT = "Thanks. Tap the step you think was the key one.";
+/** After a how_sure beat, which only comes on a right answer: by the reason given, else by the level. */
+export const CONFIDENCE_REPLIES = {
+  level: {
+    1: "A guess, and it landed. Next time, check it so you know it's right.",
+    2: "Fairly sure, and right. You know this better than you feel.",
+    3: "Certain, and right. That's the feeling to trust.",
+  },
+  reason: {
+    checked_back: "Putting it back in to check is the best way to be sure. Keep doing that.",
+    each_step: "Checking each line against the one before is exactly how to be sure.",
+    like_last_one: "Spotting that it's the same kind helps. Check it once too, so it's more than a pattern.",
+    felt_right: "A feeling is a start. Put the answer back in once, so the feeling has proof.",
+    not_sure_why: "That's honest. Next time, put the answer back in, and you'll know why.",
+  },
+} as const;
+/** After a key_step beat: reflection, not a quiz, so every pick hears the key step named (R-30). */
+export const KEY_STEP_REPLIES: Record<string, string> = {
+  undo_first: "Yes. Undoing the added or taken-away number first clears the way to x.",
+  undo_times: "Dividing finishes it, and it only works once the added number is gone. The first undo is the key.",
+  check_back: "Checking is a strong habit. The step that unlocks it is undoing what was done to x, last thing first.",
+  read_problem: "Reading what was done to x is where it starts. Then undo it, last thing first.",
+};
+export const KEY_STEP_REPLY_NONE = "That's fine. The key step is undoing what was done to x, last thing first.";
+
 /** The skill map's first probe for a node, as an answer-box problem. */
 export function probeProblem(skill_id: string): ScriptedProblem {
   const probe = skillMap.nodes.find((n) => n.id === skill_id)?.probes[0];

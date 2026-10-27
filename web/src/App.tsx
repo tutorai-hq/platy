@@ -113,6 +113,8 @@ export function App() {
                     onHint={s.hint}
                     nextUp={s.state.nextUp}
                     onNext={s.next}
+                    confidence={s.state.confidence}
+                    onConfidence={s.confidence}
                   />
                 ) : (
                   <ProblemCard
@@ -123,6 +125,8 @@ export function App() {
                     note={s.state.resetNote}
                     nextUp={s.state.nextUp}
                     onNext={s.next}
+                    confidence={s.state.confidence}
+                    onConfidence={s.confidence}
                   />
                 )}
                 <Chat
@@ -149,7 +153,7 @@ export function App() {
             <main className="screen screen--map">
               <div className="screen__inner">
                 <h1>Your map</h1>
-                <YourMap report={s.state.map} solved={s.state.solved} firstTry={s.state.firstTry} />
+                <YourMap report={s.state.map} solved={s.state.solved} firstTry={s.state.firstTry} calibration={s.state.calibration} />
                 <button type="button" className="btn btn--primary btn--big" onClick={s.start} autoFocus>
                   Practice again
                 </button>

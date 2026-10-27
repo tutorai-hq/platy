@@ -89,7 +89,13 @@ by" screen, which holds until you reload the page.
    write `2x = 99`, and Platy probes one level down (`x - 8 = -3`, answer `-11`), then one more
    (`x - 4 + b = x`, answer `-4`). That's the gap: a worked example teaches it, three fades
    (**Demo → Skip** moves through them). Back on `2x + 5 = 17`, write `2x = 22`: a repair puzzle
-   on that one move, then a fresh generated problem confirms the fix. Writing `2x = 12` and then
+   on that one move, then a fresh generated problem confirms the fix. Before Platy says whether
+   that fresh problem is right, it asks how sure you are (R-30): three taps, **Guessing**, **Fairly
+   sure** or **Certain**, then what made you sure, from a short list; the verdict comes after
+   (R-02). That's the session's one confidence check. A session that gets to its end without one
+   has it before the closing line: which step was the key one, when a gap was taught, otherwise
+   how sure you were about the last answer. Your map then ends with one line comparing how sure
+   you said with how it went. Writing `2x = 12` and then
    `x = 10` instead opens the one-step repair, a balance scale for `ax = c`, because that slip is one
    skill down. A right answer on a probe ends the probing early and goes back to the problem.
 
@@ -135,12 +141,13 @@ src/
     index.ts             picks mock unless VITE_PLATY_SERVER_URL is set
   mock/                  scripted lesson, answer, step and slip checking, and puzzle items, skins,
                          problem generators and grading (all go away with the real backend)
-  content/               puzzle types, balance-scale moves, team-color palette, slip map
+  content/               puzzle types, balance-scale moves, team-color palette, slip map, and the
+                         words for the primer view, the map and the confidence check
   math/                  child-math parser, LaTeX output, KaTeX rendering, keypad keys, and the
                          terms of each line for the step solver's motion
   session/               reducer + hook holding all session state in memory
-  components/            ProblemCard, StepSolver, PuzzlePlayer (+ puzzles/), MathInput, Chat,
-                         Overlays, Mascot
+  components/            ProblemCard, StepSolver, ConfidenceCheck, PuzzlePlayer (+ puzzles/),
+                         MathInput, Chat, YourMap, PrimerPanel, Overlays, Mascot
 ```
 
 ### Pointing it at a real server
@@ -231,6 +238,23 @@ report and the map's edges alone (`src/content/map.ts`): due for review whenever
 so (even when mastered), mastered at 0.8 or more, unlocked when every prerequisite is mastered,
 and next to unlock when its prerequisites are mastered or went up today, at least one of them
 today. A drop never makes a skill "next". Connor's policy would set the threshold and the "due" call from its forgetting model.
+
+The confidence check (R-30, proposed for Connor to accept) adds `confidence_check {problem_id,
+kind: "how_sure" | "key_step", choices: code[]}` from the server and `confidence {problem_id,
+level: 1 | 2 | 3 | null, reason: code | null}` from the client. The server sends one check per
+session, on the card of the problem it's about. Its moment: before the verdict on the right answer
+to the problem after a detour (the demo arc's fresh problem), so the beat never says whether the
+answer is right until it's answered (R-02); or, when the session gets to its end without one,
+after the last verdict and before the closing line, as `key_step` when a gap was taught in the
+session and `how_sure` otherwise. An explicit **End session** runs no beat. `choices` are codes
+from the server (the mock sends the reason or step codes in `src/content/confidence.json`); the
+browser shows their words from that table, nothing for a code it doesn't know, and sends codes
+back: `level` for how sure (null on a `key_step` check) and `reason` for the tap that followed, or
+null for a guess or "I'd rather not say". Free text about why goes as an ordinary
+`child_message`. While a check waits, the server ignores `answer`, `step` and `hint_requested`;
+a pause drops the check, and the next right answer after the warm-up gets it. The primer view
+gets a `check_confidence` move. On Your map, one line compares the level with the verdict that
+followed, worked out in the browser from the session's events alone, and gone with the session.
 
 `answer_result`, `instruction`/`position`/`total` on `problem`, and `resume` are additions to the
 plan's first draft; they let the problem card give feedback and show progress. Answers are sent

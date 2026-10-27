@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "about": "Words for the confidence check (R-30). The server sends codes only; each code's text lives here, so nothing the student typed is ever in a confidence event. The calibration lines are for Your map, from one beat's level and the verdict that followed.",
+  "levels": {
+    "1": "Guessing",
+    "2": "Fairly sure",
+    "3": "Certain"
+  },
+  "how_sure": {
+    "ask": "How sure are you?",
+    "why": "What made you sure?",
+    "skip": "I'd rather not say"
+  },
+  "reasons": {
+    "checked_back": "I put it back in to check",
+    "each_step": "Every line followed from the one before",
+    "like_last_one": "It looked like the last one",
+    "felt_right": "It just felt right",
+    "not_sure_why": "I'm not sure why"
+  },
+  "key_step": {
+    "ask": "Which step was the key one?",
+    "skip": "I'm not sure"
+  },
+  "steps": {
+    "undo_first": "Undoing the added or taken-away number first, on both sides",
+    "undo_times": "Dividing both sides by the number in front of x",
+    "check_back": "Putting the answer back in to check it",
+    "read_problem": "Reading what was done to x, in order"
+  },
+  "calibration": {
+    "right": {
+      "1": "You said guessing, and it was right. Next time, check it so you know.",
+      "2": "You said fairly sure, and you were right. You know this better than you feel.",
+      "3": "You said certain, and you were right. Trust that feeling."
+    },
+    "wrong": {
+      "1": "You said guessing, and it wasn't right. That's where learning starts.",
+      "2": "You said fairly sure, but it wasn't right. Checking it first catches that.",
+      "3": "You said certain, but it wasn't right. Checking it first catches that."
+    }
+  }
+}

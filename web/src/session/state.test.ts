@@ -270,6 +270,93 @@ describe("session reducer", () => {
     });
   });
 
+  // R-30: the one metacognition beat. The server's check carries codes; the reducer keeps the
+  // beat's level and the verdict that follows, as numbers, for the one line on Your map.
+  describe("confidence check (R-30)", () => {
+    const problem = (problem_id: string, format: "answer" | "steps" = "answer") => ({
+      type: "server" as const,
+      event: {
+        type: "problem" as const, problem_id, skill_id: "two_step_equations", prompt: "2x + 5 = 17", instruction: "Solve",
+        format, kind: "practice" as const, position: 1, total: 2,
+      },
+    });
+    const check = (problem_id: string, kind: "how_sure" | "key_step" = "how_sure"): ServerEvent => ({
+      type: "confidence_check", problem_id, kind, choices: kind === "how_sure" ? ["checked_back", "felt_right"] : ["undo_first"],
+    });
+    const verdict = (problem_id: string, result: "correct" | "incorrect"): ServerEvent => ({ type: "answer_result", problem_id, result });
+    const line = (result: StepResult): ServerEvent => ({ type: "step_result", problem_id: "s1", line: 1, result });
+    /** A problem on screen with a how_sure check waiting on its card. */
+    const waiting = (problem_id = "g1", format: "answer" | "steps" = "answer") =>
+      reducer(reducer(live(), problem(problem_id, format)), { type: "server", event: check(problem_id) });
+
+    it("puts the check on the card of the problem on screen, and ignores one about any other", () => {
+      expect(waiting().confidence).toEqual({ problem_id: "g1", kind: "how_sure", choices: ["checked_back", "felt_right"] });
+      const other = reducer(live(), problem("g1"));
+      expect(reducer(other, { type: "server", event: check("g2") })).toBe(other);
+      const none = live();
+      expect(reducer(none, { type: "server", event: check("g1") })).toBe(none);
+    });
+
+    it("records how sure they said, then the verdict that follows", () => {
+      const s = reducer(waiting(), { type: "confidence_sent", level: 2 });
+      expect(s.confidence).toBeNull();
+      expect(s.calibration).toEqual({ level: 2, right: null });
+      expect(reducer(s, { type: "server", event: verdict("g1", "correct") }).calibration).toEqual({ level: 2, right: true });
+      expect(reducer(s, { type: "server", event: verdict("g1", "incorrect") }).calibration).toEqual({ level: 2, right: false });
+      // On a step-by-step card the verdict is the line's: solved or marked. A valid line isn't it yet.
+      const t = reducer(reducer(waiting("s1", "steps"), { type: "confidence_sent", level: 3 }), { type: "step_sent", text: "x = 6" });
+      expect(reducer(t, { type: "server", event: line("solved") }).calibration).toEqual({ level: 3, right: true });
+      expect(reducer(t, { type: "server", event: line("invalid") }).calibration).toEqual({ level: 3, right: false });
+      expect(reducer(t, { type: "server", event: line("valid") }).calibration).toEqual({ level: 3, right: null });
+    });
+
+    it("knows the verdict already when the beat comes after it, before the session closes", () => {
+      let s = reducer(reducer(live(), problem("p3")), { type: "server", event: verdict("p3", "correct") });
+      s = reducer(reducer(s, { type: "server", event: check("p3") }), { type: "confidence_sent", level: 1 });
+      expect(s.calibration).toEqual({ level: 1, right: true });
+    });
+
+    it("keeps the one beat's verdict, and takes no level from a key-step pick", () => {
+      let s = reducer(reducer(waiting(), { type: "confidence_sent", level: 3 }), { type: "server", event: verdict("g1", "correct") });
+      // A wrong answer on a later problem doesn't rewrite it.
+      s = reducer(reducer(s, problem("g2")), { type: "server", event: verdict("g2", "incorrect") });
+      expect(s.calibration).toEqual({ level: 3, right: true });
+      s = reducer(s, { type: "server", event: check("g2", "key_step") });
+      expect(s.confidence).toMatchObject({ kind: "key_step", choices: ["undo_first"] });
+      s = reducer(s, { type: "confidence_sent", level: null });
+      expect(s.confidence).toBeNull();
+      expect(s.calibration).toEqual({ level: 3, right: true });
+    });
+
+    it("ignores an answer when no check is waiting", () => {
+      const s = reducer(live(), problem("g1"));
+      expect(reducer(s, { type: "confidence_sent", level: 3 })).toBe(s);
+    });
+
+    it("goes with its problem: a new problem, a reset or the session's end drops it", () => {
+      expect(reducer(waiting(), problem("g2")).confidence).toBeNull();
+      expect(reducer(waiting(), { type: "server", event: { type: "reset", reason: "problem_end" } }).confidence).toBeNull();
+      expect(reducer(waiting(), { type: "server", event: { type: "session_end", solved: 1 } }).confidence).toBeNull();
+    });
+
+    it("carries the beat's numbers to the end screen, and no further", () => {
+      let s = reducer(reducer(waiting(), { type: "confidence_sent", level: 2 }), { type: "server", event: verdict("g1", "correct") });
+      s = reducer(s, { type: "server", event: { type: "reset", reason: "problem_end" } });
+      expect(s.calibration).toEqual({ level: 2, right: true });
+      const end = reducer(s, { type: "server", event: { type: "session_end", solved: 1 } });
+      expect(end.calibration).toEqual({ level: 2, right: true });
+      expect(reducer(end, { type: "started" }).calibration).toBeNull();
+      expect(reducer(s, { type: "server", event: { type: "error", code: "socket_closed" } }).calibration).toBeNull();
+    });
+
+    it("holds codes and numbers only, never what the student typed", () => {
+      let s = reducer(waiting(), { type: "child_said", id: "k1", text: "canary-5150 i checked it" });
+      expect(JSON.stringify(s.confidence)).not.toContain("canary");
+      s = reducer(s, { type: "confidence_sent", level: 3 });
+      expect(JSON.stringify(s.calibration)).toBe('{"level":3,"right":null}');
+    });
+  });
+
   describe("Platy's typing dots", () => {
     const msg = (from: "tutor" | "child") => ({ id: from, from, text: "hi", streaming: false });
     it("show only while a reply to the student is due", () => {

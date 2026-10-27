@@ -4,8 +4,10 @@ import { slipHint } from "../content/slips";
 import { Tex } from "../math/MathText";
 import { childMathToLatex } from "../math/latex";
 import { type Equation, equationTerms, planStep, type Side, type TermRef, termLatex } from "../math/terms";
+import type { Level } from "../content/confidence";
 import type { Problem } from "../protocol";
-import type { StepsState } from "../session/state";
+import type { ConfidenceCheck as Check, StepsState } from "../session/state";
+import { ConfidenceCheck } from "./ConfidenceCheck";
 import { Mascot } from "./Mascot";
 import { NextUp } from "./NextUp";
 import { problemLabel } from "./ProblemCard";
@@ -19,6 +21,9 @@ interface Props {
   /** The label of the button to what's next, while the server waits for the student. */
   nextUp: string | null;
   onNext: () => void;
+  /** The confidence check on this card (R-30): it takes the place of the line box. */
+  confidence?: Check | null;
+  onConfidence?: (problemId: string, level: Level | null, reason: string | null) => void;
 }
 
 const MARKS = {
@@ -42,8 +47,9 @@ const EASE = "cubic-bezier(0.2, 0.7, 0.2, 1)";
 
 // Step-by-step solving (R-48): the student writes one line at a time under the problem. Each
 // line is checked before the next one opens, and a wrong line is marked where it is.
-export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: Props) {
+export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext, confidence = null, onConfidence }: Props) {
   const rows = [problem.prompt, ...steps.lines];
+  const check = confidence?.problem_id === problem.problem_id ? confidence : null;
   const card = useRef<HTMLElement>(null);
   const shown = useRef(rows.length);
 
@@ -78,10 +84,11 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: P
           <Row key={i} index={i} text={text} last={solved && i === rows.length - 1} />
         ))}
         {(marked || busy) && (
-          <li className={`ladder__row ladder__row--${busy ? "pending" : "marked"}`} aria-label={busy ? "Checking this line" : "Line to fix"}>
+          // While the confidence check waits, the line waits with it, unmarked: the verdict comes after (R-30).
+          <li className={`ladder__row ladder__row--${busy ? "pending" : "marked"}`} aria-label={busy ? (check ? "Your line" : "Checking this line") : "Line to fix"}>
             <LineMath text={busy ? steps.pending! : marked!.text} />
             <span className="ladder__mark" aria-hidden="true">
-              {busy ? "…" : "?"}
+              {busy ? (check ? "" : "…") : "?"}
             </span>
           </li>
         )}
@@ -103,7 +110,9 @@ export function StepSolver({ problem, steps, onStep, onHint, nextUp, onNext }: P
           <p>Every line checks out.</p>
         </div>
       )}
-      {nextUp !== null ? (
+      {check !== null ? (
+        <ConfidenceCheck key={check.kind} check={check} busy={false} onAnswer={(level, reason) => onConfidence?.(problem.problem_id, level, reason)} />
+      ) : nextUp !== null ? (
         <NextUp label={nextUp} onNext={onNext} />
       ) : solved ? null : (
         <LineEntry

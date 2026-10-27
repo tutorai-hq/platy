@@ -111,7 +111,15 @@ export type ServerEvent =
   | { type: "puzzle_result"; instance_id: string; check: CheckId; outcome: CheckOutcome }
   | { type: "puzzle_done"; instance_id: string }
   /** The primer's state after each move (R-42). Sent only when the demo flag is on. */
-  | ({ type: "primer_state" } & PrimerState);
+  | ({ type: "primer_state" } & PrimerState)
+  /**
+   * The metacognition beat (R-30), once per session. `how_sure` comes before the verdict on a
+   * right answer: the card asks how sure the student is, then why. `key_step` comes after a
+   * reteach: which step of the example was the key one. `choices` are codes; the browser's table
+   * (content/confidence.json) gives their words, so nothing the student typed is ever in the beat.
+   * Proposed for Connor: the server side is TutorAction.CHECK_CONFIDENCE.
+   */
+  | { type: "confidence_check"; problem_id: string; kind: "how_sure" | "key_step"; choices: string[] };
 
 export type ClientEvent =
   | { type: "child_message"; text: string }
@@ -130,4 +138,10 @@ export type ClientEvent =
   /** The student finished a puzzle and is ready to move on. */
   | { type: "puzzle_next"; instance_id: string }
   /** The student's own pick for a skin slot (R-38), from a fixed palette, never free text. */
-  | { type: "slot_pick"; colors: PaletteId };
+  | { type: "slot_pick"; colors: PaletteId }
+  /**
+   * The student's answer to a confidence check (R-30): how sure they are (1 guessing, 2 fairly
+   * sure, 3 certain; null on a key_step beat) and one of the check's choice codes, or null when
+   * they'd rather not say. Codes only: anything they want to add goes as a child_message.
+   */
+  | { type: "confidence"; problem_id: string; level: 1 | 2 | 3 | null; reason: string | null };

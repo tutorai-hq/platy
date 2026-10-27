@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { childMathToLatex } from "../math/latex";
 import { Tex } from "../math/MathText";
+import type { Level } from "../content/confidence";
 import type { Problem } from "../protocol";
-import type { AnswerFeedback } from "../session/state";
+import type { AnswerFeedback, ConfidenceCheck as Check } from "../session/state";
+import { ConfidenceCheck } from "./ConfidenceCheck";
 import { MathInput } from "./MathInput";
 import { Mascot } from "./Mascot";
 import { NextUp } from "./NextUp";
@@ -38,9 +40,12 @@ interface Props {
   /** The label of the button to what's next, while the server waits for the student. */
   nextUp: string | null;
   onNext: () => void;
+  /** The confidence check on this card (R-30): it takes the place of the answer buttons. */
+  confidence?: Check | null;
+  onConfidence?: (problemId: string, level: Level | null, reason: string | null) => void;
 }
 
-export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp, onNext }: Props) {
+export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp, onNext, confidence = null, onConfidence }: Props) {
   const [draft, setDraft] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
   const [select, setSelect] = useState(0);
@@ -68,7 +73,8 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
   }
 
   const solved = feedback === "correct";
-  const locked = solved || nextUp !== null;
+  const check = confidence?.problem_id === problem.problem_id ? confidence : null;
+  const locked = solved || nextUp !== null || check !== null;
   const submit = () => {
     if (!canCheck(draft) || locked) return;
     onAnswer(problem.problem_id, draft.trim());
@@ -114,7 +120,10 @@ export function ProblemCard({ problem, feedback, onAnswer, onHint, note, nextUp,
         )}
       </p>
 
-      {nextUp !== null ? (
+      {check !== null ? (
+        // The beat comes before the verdict (R-30), so nothing here says yet whether it's right.
+        <ConfidenceCheck key={check.kind} check={check} busy={false} onAnswer={(level, reason) => onConfidence?.(problem.problem_id, level, reason)} />
+      ) : nextUp !== null ? (
         <NextUp label={nextUp} onNext={onNext} />
       ) : (
         <div className="problem__actions dock-bottom">
