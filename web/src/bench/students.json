@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "about": "Simulated students for the bench (R-01). Each is a rule, not a learner: a gap on a node makes every problem on that node, and on any node that needs it, wrong until that node is taught; a slip is one known wrong move (web/src/content/slips.json) made every time until its repair; everything else is answered right. 'expected.found' is the gap the mock primer should name (its gap_found hypothesis), null when there is none to find; 'note' says why it differs from what was planted. Plain JSON so the Python bench (src/platy/evaluation) can run the same students.",
+  "students": [
+    {
+      "id": "no-gap",
+      "gaps": [],
+      "slips": [],
+      "answers_right_elsewhere": true,
+      "expected": { "found": null }
+    },
+    {
+      "id": "gap-inverse-operations",
+      "gaps": ["inverse_operations"],
+      "slips": [],
+      "answers_right_elsewhere": true,
+      "expected": { "found": "inverse_operations" }
+    },
+    {
+      "id": "gap-one-step-equations",
+      "gaps": ["one_step_equations"],
+      "slips": [],
+      "answers_right_elsewhere": true,
+      "expected": { "found": "one_step_equations" }
+    },
+    {
+      "id": "slip-constant-moved",
+      "gaps": [],
+      "slips": ["constant_moved_without_undoing"],
+      "answers_right_elsewhere": true,
+      "expected": { "found": null, "note": "A slip, not a gap: one probe passes, then the repair and a fresh problem." }
+    },
+    {
+      "id": "slip-coefficient",
+      "gaps": [],
+      "slips": ["coefficient_subtracted"],
+      "answers_right_elsewhere": true,
+      "expected": { "found": null, "note": "A one-step slip on line 2 of a two-step problem: one probe passes, then the one-step repair." }
+    },
+    {
+      "id": "gap-inverse-with-slip",
+      "gaps": ["inverse_operations"],
+      "slips": ["constant_moved_without_undoing"],
+      "answers_right_elsewhere": true,
+      "expected": { "found": "inverse_operations", "note": "The gap is found and taught first; the slip still shows on the way back and gets its repair." }
+    },
+    {
+      "id": "two-gaps",
+      "gaps": ["one_step_equations", "inverse_operations"],
+      "slips": [],
+      "answers_right_elsewhere": true,
+      "expected": { "found": "inverse_operations", "note": "The deeper gap is found. The mock never probes again after teaching, so the one-step gap is never named: the session stalls on misses. A limit of the mock to carry into the real policy." }
+    },
+    {
+      "id": "gap-integer-arithmetic",
+      "gaps": ["integer_arithmetic"],
+      "slips": [],
+      "answers_right_elsewhere": true,
+      "expected": { "found": "inverse_operations", "note": "Three levels below two-step equations. The mock probes two levels down and names the deepest miss, so this gap is misdiagnosed as inverse operations and the explanation doesn't land. R-01 says one to two levels; a real policy needs a rule for a miss on the deepest probe." }
+    }
+  ]
+}

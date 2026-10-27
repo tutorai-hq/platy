@@ -161,10 +161,13 @@ src/
   math/                  child-math parser, LaTeX output, KaTeX rendering, keypad keys, and the
                          terms of each line for the step solver's motion
   session/               reducer + hook holding all session state in memory
+  bench/                 the simulated-student bench (R-01): fixtures, a rule-based student, a
+                         runner that drives the mock, and the report (npm run bench)
   components/            ProblemCard, StepSolver, StoryCard, ConfidenceCheck, PuzzlePlayer (+ puzzles/),
                          MathInput, Chat, YourMap, PrimerPanel, Overlays, Mascot
 scripts/
   coverage.mjs           writes docs/content/coverage.md from the catalog (npm run coverage)
+  bench.mjs              prints the simulated-student bench report to stdout (npm run bench)
 ```
 
 ### Pointing it at a real server
@@ -226,6 +229,20 @@ player and units, two story hints, and the wrong setups with the question for ea
 `src/mock/stories.ts` draws the numbers, builds the choices and grades the setup, standing in for
 the server, which would do the same from the same file with `platy.mathcheck`. The real app
 should offer the typed setup as well as the three taps.
+
+The simulated-student bench (R-01): `npm --prefix web run bench` runs eight rule-based students
+(`src/bench/students.json`: no gap, a gap in inverse operations, in one-step equations, in integer
+arithmetic, two gaps, and the common slips) through the mock's two step-by-step problems, and prints,
+per student, the gap planted against the gap the primer named, the probes used, the items shown and
+whether the fresh problem after a repair was right, then per node how many were right first time
+and right on the fresh problem. A student is a rule, not a learner: a gap makes every problem on
+that node, and on every node that needs it, wrong until that node is taught; a slip is one known
+wrong move until its repair. It measures the mock primer's logic, not learning. Its value is
+catching regressions in the demo arc, and the fixtures and expected outcomes, which Connor's
+Python bench (`src/platy/evaluation`, the `simulated_student` role) can reuse. Two fixtures record
+where the mock's logic runs out: a gap three levels down is misnamed as inverse operations, and a
+second gap is never found because the mock never probes again. Nothing is written to disk. The
+learning number for YC is still R-26, with real teens.
 
 Generated problems (R-41): `src/mock/generate.ts` makes problems for the five demo skills at three
 levels (1 small positive whole numbers, 2 negatives or bigger numbers, 3 a fraction or decimal
